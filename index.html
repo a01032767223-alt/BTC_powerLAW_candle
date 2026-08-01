@@ -38,7 +38,7 @@
   .c1 b{color:var(--btc)} .c2 b{color:var(--sup)} .c3 b{color:var(--fair)} .c4 b{color:var(--up)}
   .c5 b{color:#ff8a8a} .c6 b{color:#7dd3fc} .c7 b{color:#b8b0e8;font-size:13px}
   .c8 b{color:#fbbf24} .c9 b{color:#fb923c}
-  .c10 b{color:#f472b6;font-size:13px} .c11 b{color:#ec4899}
+  .c10 b{color:#00e5ff;font-size:13px} .c11 b{color:#00acc1}
   .bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
   .bar em{font-style:normal;font-size:11px;color:var(--mute)}
   button{font-family:var(--mono);font-size:11.5px;color:var(--mute);background:transparent;border:1px solid var(--line);
@@ -197,7 +197,7 @@
   주봉·월봉은 이 종가들을 묶어 시·고·저·종가를 만든 값이라, 데이터가 성긴 5월 말~6월 초 구간은 주중 고저가 실제보다 좁게 나올 수 있습니다.
   다만 장중 순간 저점(예: 2020‑03‑12의 급락 꼬리)은 종가 기준이라 실제보다 짧게 나옵니다.<br>
   <b>오실레이터.</b> 캔들 아래 띠는 그날 가격이 하단선(0)과 상단선(100) 사이 어디였는지를 시계열로 그린 것입니다.
-  세로 점선은 반감기(2028년은 추정). 핑크 마름모는 각 사이클의 실제 고점 — 2013·2017·2021·2025년 모두
+  세로 점선은 반감기(2028년은 추정). 청록색 마름모는 각 사이클의 실제 고점 — 2013·2017·2021·2025년 모두
   해당 반감기로부터 371·525·546·534일 뒤였고, 최근 3회는 525~546일로 꽤 일정합니다. 이 평균(535일)을
   다음 반감기 추정일에 더해 다음 고점을 가늠해 표시했습니다. 표본이 넷뿐이라 오차가 클 수 있는
   경험적 패턴이며, 반감기 자체가 가격을 밀어 올린다는 인과를 증명하는 건 아닙니다.<br>
@@ -523,18 +523,23 @@ function draw(){
     let lastRight=-1e9, rowToggle=0;
     for(const h of visible){
       const known = h.price!=null;
-      const col = known ? 'rgba(244,114,182,.9)' : 'rgba(244,114,182,.55)';
+      const col = known ? 'rgba(0,229,255,.9)' : 'rgba(0,229,255,.55)';
 
       if(known){
         const y=Y(h.price);
-        ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(244,114,182,.35)'; ctx.lineWidth=1;
+        ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(0,229,255,.35)'; ctx.lineWidth=1;
         ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle='#f472b6';
+        ctx.save();
+        ctx.shadowColor='#00e5ff'; ctx.shadowBlur=9;
+        ctx.fillStyle='#00e5ff';
         ctx.beginPath();
-        for(let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4, r=6;
+        for(let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4, r=7.5;
           const px=h.x+Math.cos(a)*r, py=y+Math.sin(a)*r;
           i? ctx.lineTo(px,py) : ctx.moveTo(px,py); }
         ctx.closePath(); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.strokeStyle='#0b0722'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.restore();
       } else {
         ctx.setLineDash([5,4]); ctx.strokeStyle=col; ctx.lineWidth=1.4;
         ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y1); ctx.stroke(); ctx.setLineDash([]);
@@ -551,7 +556,7 @@ function draw(){
       ctx.fillRect(lx, py, tw+16, 16);
       ctx.strokeStyle=col; ctx.lineWidth=1;
       ctx.strokeRect(lx+.5, py+.5, tw+15, 15);
-      ctx.fillStyle='#f472b6'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle='#00e5ff'; ctx.textAlign='left'; ctx.textBaseline='middle';
       ctx.fillText(text, lx+8, py+8.5);
       lastRight = lx+tw+16;
     }
