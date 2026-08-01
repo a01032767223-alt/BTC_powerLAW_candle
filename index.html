@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Bitcoin Power Law — 캔들 연장 차트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;1,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0722; --bg2:#120c30; --panel:#171040; --line:#2a2060;
+    --sup:#ef4444; --fair:#22c55e; --up:#a855f7; --btc:#f7931a;
+    --ink:#e8e5fb; --mute:#8e86c4;
+    --display:'Barlow Condensed','Arial Narrow',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+    --body:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--body);-webkit-text-size-adjust:100%}
+  body{padding:14px 12px 36px;max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+  .mark{width:42px;height:42px;border-radius:50%;background:var(--btc);flex:0 0 auto;display:grid;place-items:center;
+        font-family:var(--display);font-weight:700;font-size:29px;color:#0b0722;box-shadow:0 0 0 5px rgba(247,147,26,.13)}
+  h1{font-family:var(--display);font-weight:700;font-style:italic;font-size:29px;line-height:.95;margin:2px 0 3px}
+  .sub{font-size:12.5px;color:var(--mute);line-height:1.5}
+  .live{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;margin:12px 0 8px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+  .chip span{display:block;font-size:10px;color:var(--mute);letter-spacing:.4px;margin-bottom:3px}
+  .chip b{display:block;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px}
+  .c1 b{color:var(--btc)} .c2 b{color:var(--sup)} .c3 b{color:var(--fair)} .c4 b{color:var(--up)}
+  .c5 b{color:#ff8a8a} .c6 b{color:#7dd3fc} .c7 b{color:#b8b0e8;font-size:13px}
+  .bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .bar em{font-style:normal;font-size:11px;color:var(--mute)}
+  button{font-family:var(--mono);font-size:11.5px;color:var(--mute);background:transparent;border:1px solid var(--line);
+         border-radius:8px;padding:5px 10px;cursor:pointer;transition:.15s}
+  button:hover{color:var(--ink);border-color:#463699}
+  button[aria-pressed="true"]{background:var(--btc);border-color:var(--btc);color:#150c02;font-weight:600}
+  button:focus-visible{outline:2px solid var(--btc);outline-offset:2px}
+  .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+  .chartwrap{position:relative;background:var(--bg2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  #chart{display:block;width:100%;touch-action:none;cursor:crosshair}
+  #tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .1s;background:rgba(9,6,26,.96);
+       border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:var(--mono);font-size:11px;
+       line-height:1.6;white-space:nowrap;z-index:3;box-shadow:0 8px 24px rgba(0,0,0,.55)}
+  #tip .d{color:var(--mute);font-size:10px;margin-bottom:4px}
+  #tip i{font-style:normal;display:inline-block;width:40px;color:var(--mute)}
+  .hint{margin:7px 2px 0;text-align:right;font-size:10.5px;color:#5f5896;font-family:var(--mono)}
+  .grid2{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:12px;margin-top:12px;align-items:start}
+  @media(max-width:700px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:13px}
+  .card h2{font-family:var(--display);font-weight:700;font-style:italic;font-size:17px;margin:0 0 2px}
+  .card p.note{font-size:11px;color:var(--mute);margin:0 0 6px;line-height:1.5}
+  #gauge{display:block;width:100%;max-width:200px;margin:0 auto}
+  .gval{text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+  .gval b{color:var(--ink);font-size:15px}
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  th,td{padding:6px 3px;text-align:right;border-bottom:1px solid rgba(42,32,96,.6)}
+  th{font-size:9.5px;letter-spacing:.5px;color:var(--mute);font-weight:500}
+  th:first-child,td:first-child{text-align:left;color:var(--ink);font-weight:500}
+  td.s{color:var(--sup)} td.f{color:var(--fair)} td.u{color:var(--up)}
+  .foot{margin-top:14px;font-size:11.5px;color:var(--mute);line-height:1.65}
+  .foot b{color:#b8b0e8;font-weight:500}
+  #src{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:#5f5896}
+
+  details.panel{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:11px 13px;margin-top:12px}
+  details.panel summary{font-family:var(--display);font-weight:700;font-style:italic;font-size:16px;cursor:pointer;list-style:none;
+                         display:flex;align-items:center;gap:8px}
+  details.panel summary::-webkit-details-marker{display:none}
+  details.panel summary::before{content:'▸ ';color:var(--btc);font-style:normal}
+  details.panel[open] summary::before{content:'▾ '}
+  #connStat{font-family:var(--mono);font-size:11px;font-weight:500;font-style:normal;color:var(--mute)}
+  .fillbody{margin-top:9px}
+  .fillbody p{font-size:11.5px;color:var(--mute);line-height:1.6;margin:0 0 9px}
+  .fillbody .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .fillbody label{font-size:11.5px;color:var(--mute);display:flex;align-items:center;gap:5px}
+  .fillbody input,.fillbody select,.fillbody textarea{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    font-family:var(--mono);font-size:12px;padding:6px 8px}
+  .fillbody input{width:88px} .fillbody input#proxyUrl{width:100%;max-width:320px}
+  .fillbody textarea{width:100%;min-height:104px;line-height:1.55;resize:vertical}
+  .fillbody #msg,.fillbody #connMsg{font-family:var(--mono);font-size:11px;color:#7dd3fc}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">₿</div>
+  <div>
+    <h1>Bitcoin Long Term Power Law</h1>
+    <div class="sub">일 4,891개 실측 종가 + 7/31까지 대화 중 채운 데이터 · 워커 연결 시 실시간 자동 갱신. 두 손가락 확대, 끌어서 이동.</div>
+  </div>
+</header>
+
+<div class="live">
+  <div class="chip c1"><span id="vNowLabel">현재가 (웹 참고)</span><b id="vNow">—</b></div>
+  <div class="chip c7"><span>캔들 기준일</span><b id="vBase">—</b></div>
+  <div class="chip c5"><span>ATH 대비</span><b id="vDD">—</b></div>
+  <div class="chip c6"><span>하단선까지</span><b id="vGap">—</b></div>
+  <div class="chip c2"><span>하단 · 지지</span><b id="vSup">—</b></div>
+  <div class="chip c3"><span>중단 · 적정</span><b id="vFair">—</b></div>
+  <div class="chip c4"><span>상단 · 과열</span><b id="vUp">—</b></div>
+</div>
+
+<div class="bar">
+  <em>봉</em>
+  <button data-tf="auto" aria-pressed="true">자동</button>
+  <button data-tf="d">일</button>
+  <button data-tf="w">주</button>
+  <button data-tf="m">월</button>
+  <div class="sep"></div>
+  <em>구간</em>
+  <button data-span="0.5">6개월</button>
+  <button data-span="2">2년</button>
+  <button data-span="5">5년</button>
+  <button data-span="all" aria-pressed="true">전체</button>
+  <button data-span="future">미래포함</button>
+</div>
+
+<div class="chartwrap">
+  <canvas id="chart"></canvas>
+  <div id="tip"></div>
+</div>
+<div class="hint">핀치 · 휠로 확대 · 드래그로 이동 · 더블탭 초기화</div>
+
+<details id="conn" class="panel">
+  <summary>실시간 연결 <span id="connStat">○ 정적 데이터</span></summary>
+  <div class="fillbody">
+    <p>Cloudflare Worker(<b>btc-proxy-worker.js</b>)를 배포한 뒤 그 주소를 넣고 연결해 보세요.
+       연결되면 캔들 데이터 뒤에 오늘까지의 구간이 자동으로 채워지고, 현재가도 60초마다 갱신됩니다.
+       여기서 넣은 값은 이 화면을 새로고침하면 사라지니, GitHub Pages에 올릴 때는
+       파일 위쪽의 <code>PROXY</code> 상수에 직접 적어 두세요.</p>
+    <div class="row">
+      <input id="proxyUrl" placeholder="https://btc-proxy.내계정.workers.dev">
+      <button id="connectBtn">연결</button>
+    </div>
+    <p id="connMsg"></p>
+  </div>
+</details>
+
+<details id="fill" class="panel">
+  <summary>최근 구간 직접 채우기 <span style="font-family:var(--mono);font-size:11px;font-weight:500;font-style:normal;color:var(--mute)">(실시간 연결 안 될 때만)</span></summary>
+  <div class="fillbody">
+    <p>지금은 2026‑07‑31까지 실측 데이터가 채워져 있습니다. 그 이후 구간만 업비트 주봉에서
+       캔들을 하나씩 눌러 시·고·저·종가를 읽어 한 줄에 한 주씩 붙여 넣으세요.
+       <b>날짜, 시가, 고가, 저가, 종가</b> 순이고, 쉼표나 공백으로 구분하면 됩니다.
+       종가만 아는 주는 <b>날짜, 종가</b> 두 칸만 적어도 됩니다. 실시간 연결이 되어 있으면
+       이 입력값은 무시되고 실측 데이터가 우선합니다.</p>
+    <div class="row">
+      <label>단위
+        <select id="unit"><option value="KRW">원</option><option value="USD">달러</option></select>
+      </label>
+      <label id="fxWrap">원/달러 <input id="fx" type="number" value="1439" step="0.1"></label>
+    </div>
+    <textarea id="paste" placeholder="2026-08-03, 64500000, 66000000, 62000000, 63200000
+2026-08-10, 63200000, 65000000, 60500000, 61800000"></textarea>
+    <div class="row">
+      <button id="apply">적용</button>
+      <button id="clear">지우기</button>
+      <span id="msg"></span>
+    </div>
+    <p id="gapNote">2026‑07‑31 이후, 채우기 전까지는 빗금으로 비워 둡니다. 입력한 주는 파란 음영으로 구분해 표시합니다.</p>
+  </div>
+</details>
+
+<div class="grid2">
+  <div class="card">
+    <h2>밴드 내 위치</h2>
+    <p class="note">하단 0 · 상단 100 (로그 기준)</p>
+    <canvas id="gauge"></canvas>
+    <div class="gval"><b id="gNum">—</b> / 100 · <span id="gTxt">—</span></div>
+  </div>
+  <div class="card">
+    <h2>연도별 밴드 전망</h2>
+    <p class="note">각 연도 1월 1일 모델값 (USD)</p>
+    <table><thead><tr><th>연도</th><th>하단</th><th>중단</th><th>상단</th></tr></thead><tbody id="tbody"></tbody></table>
+  </div>
+</div>
+
+<p class="foot">
+  <b>캔들 데이터.</b> 2013‑01‑01 ~ 2026‑05‑23은 일별 종가 4,891개를 파일 안에 넣었습니다(출처: Coin Metrics 커뮤니티 데이터, 결측 0일).
+  2026‑05‑26 ~ 07‑31은 Fortune·YCharts 등에서 확인한 실측값 56개를 대화 중에 이어 붙였습니다(6/12 이후는 매일, 그 전은 주 1~2회).
+  주봉·월봉은 이 종가들을 묶어 시·고·저·종가를 만든 값이라, 데이터가 성긴 5월 말~6월 초 구간은 주중 고저가 실제보다 좁게 나올 수 있습니다.
+  다만 장중 순간 저점(예: 2020‑03‑12의 급락 꼬리)은 종가 기준이라 실제보다 짧게 나옵니다.<br>
+  <b>오실레이터.</b> 캔들 아래 띠는 그날 가격이 하단선(0)과 상단선(100) 사이 어디였는지를 시계열로 그린 것입니다.
+  세로 점선은 반감기(2028년은 추정).<br>
+  <b>한계.</b> 사이클 표본 네 번의 로그회귀라 하단선이 잠시 뚫린 적도 있고, 시간이 갈수록 지지선 자체가 가팔라집니다. 여러 잣대 중 하나로만 쓰시길 권합니다.
+</p>
+<div id="src">—</div>
+
+<script>
+/* ================= 모델 ================= */
+const GENESIS=Date.UTC(2009,0,3), N=5.82, DAY=86400000;
+const A={sup:4.1508e-18, fair:1.16988e-17, up:4.1030e-17};
+const band=(t,k)=>A[k]*Math.pow((t-GENESIS)/DAY, N);
+const NOW=Date.now();
+const HALVING=[[Date.UTC(2012,10,28),'2차'],[Date.UTC(2016,6,9),'3차'],[Date.UTC(2020,4,11),'4차'],
+               [Date.UTC(2024,3,20),'5차'],[Date.UTC(2028,2,27),'6차(추정)']];
+
+/* ===== 내장 일별 종가: 2013-01-01부터 연속, base36 센트 ===== */
+const D0=Date.UTC(2013,0,1);
+const ENC="111,10w,116,11d,11e,11i,11o,12a,12e,138,13j,13h,13c,13s,13r,14v,17c,17o,17b,17o,1am,1c2,1cq,1ay,1cd,1cr,1dm,1g7,1i7,1iu,1kz,1ks,1ik,1l6,1ks,1le,1mx,1pg,1rb,1tx,1ue,1w2,1xe,1wg,23s,23h,23z,22t,22t,29p,2au,2au,2cn,2at,2b0,2cb,2ek,2es,2kq,2o5,2mu,2np,2t2,34z,3c8,38j,3dy,3m9,3jz,3q4,3fd,3mm,3md,3ma,3n0,3nh,3yp,4la,4wx,5h0,5e1,4yu,5j5,5qf,62d,6ut,6rj,6yu,743,78u,7zq,904,a4y,a9h,b07,b1g,ckd,edn,hss,cfr,6ea,8lo,7j5,6uu,68n,59o,75y,8dr,96l,9w5,954,9qv,ayt,bw5,avp,al5,9w7,ady,b3h,aqh,8yj,87e,7fk,8oi,8zl,8ng,8m1,8qa,8n1,92x,8wu,8v5,924,8bn,8er,8po,91s,949,913,93a,91p,96i,9jp,9y9,9xw,a1k,9r3,9pq,9zw,9rf,9v2,9xr,9gn,9hj,99v,9br,96p,8i4,8fa,7pi,81w,8an,87i,7tg,7nl,7pg,7n4,7q5,81p,822,81s,7tq,7pw,7qn,7n5,7jr,7m1,7gw,6we,6uo,6wk,6e7,6ry,5zt,63t,57d,54a,5kb,5pj,5s1,6k5,6r2,6y5,72f,6xp,78k,72y,70v,6k0,6nk,6jv,6ly,6lx,6pm,6sv,6yh,6xy,6sx,75n,776,7gi,7ka,7g9,7ev,7db,7fp,7ix,7jb,7hl,79u,74v,775,79v,7d5,7jk,7nc,7kj,7l1,7or,7ni,7xi,82a,8js,8g8,8b6,8eg,8q4,8ng,934,94o,964,9mx,9wm,a2m,9zx,9yu,9gd,9fx,93e,98t,93y,9cu,9fi,9t1,9s6,9tx,9lf,9ng,9qk,9si,9si,9ky,9hg,9j3,9i0,9hb,9jw,9jd,9md,9rp,9s8,9t3,9q9,9ue,817,92m,9ep,9d7,9g8,9k7,9ml,9pt,9ry,9ti,9v5,a7u,afy,ax1,ao9,b3b,bse,csh,cui,dvr,eow,fsc,f01,ebo,dvh,f0f,f57,frv,f9q,foo,fo0,fsv,g84,hnj,iss,kb5,mdw,pr3,pjl,p9w,qfy,rd5,ufu,w5j,vig,xmk,11g6,1er6,1674,19xq,1jm4,1pyc,1sdi,1qa5,1qzc,1yoq,22ar,25qb,2f3d,2ed6,22f5,28b5,29aq,2fkl,279x,1rmi,1iav,1ogl,1x54,23ed,1vju,1vdw,1vu4,1tt2,1uo6,1gb1,1go7,14lg,1gw9,1aba,1a2f,1bgd,1erl,1e7e,1gc5,1lvc,1jr5,1j8h,1k47,1krq,1kak,1m20,1okf,1qaa,1rxo,1xmx,1yk6,1pzj,1rbp,1s59,1tua,1wn0,1t7r,1rhs,1qwp,1swd,1qy9,1p6b,1qhe,1soz,1ryh,1rke,1r6y,1qkk,1o9k,1q2g,1qui,1lb2,1oyy,1p7u,1por,1pz8,1qqy,1quh,1q9o,1pqg,1oj3,1mx1,1iwl,1gag,1h1h,1gw2,1fue,1eg1,1bak,1flr,1ehq,1c39,1cpp,1cef,1c42,17i1,18s0,1aug,1b2o,15ub,156j,19c6,1963,16jd,17sh,173h,1g77,1g1n,1fq2,1fir,1cqx,1byg,1dfe,1cgv,1cwd,1cyx,1dnb,1chb,1d3a,1cxl,1c1w,1bef,1b3v,199h,17yh,17km,174o,1952,191l,18p0,11a4,12h6,11rs,zex,z4w,10yl,xvh,yog,yp8,zmg,zdz,yma,yxs,y64,sb7,wk2,wqj,w4k,zkv,148y,150c,12kg,119q,12x1,12p8,12fk,11rq,11uv,12u1,zzn,zfn,xun,y2j,yjn,ymw,zib,yw8,xve,xp0,xcy,x6t,y4a,xzc,yxi,z8s,xvr,y1s,xvh,ybp,yhk,ymi,ynu,yhk,yis,11u2,1241,14nd,14eq,14pt,188j,194l,18a9,18ov,180b,1bwl,1cg5,1cm7,1f73,1fvr,1dol,1f1i,1e5x,1eog,1era,1e0y,1e86,1cq5,19oe,1a2g,18es,19i4,19kh,1azw,1avv,19yv,19n5,19qk,1a9n,19hn,18r1,17ds,18t7,1acg,19v3,1ad0,1dav,1dm0,1e96,1dvl,1cns,1cnb,1cyz,1c25,1c7t,1bzm,1bkk,1cyh,1d58,1clo,1bs0,1bzl,1bk3,1c62,1co3,1cjp,1c8t,1bxv,1btq,1btl,1aio,1af2,19vy,19na,19bx,192j,17fn,18wm,1a0z,19i8,199v,19c9,18wc,18xd,197x,19g6,19g2,19h5,188w,17un,16b9,12z3,12ls,149b,12eo,106o,11k7,13qw,142j,13ts,12cx,138b,12pd,13ht,13d4,132d,139j,12og,10x7,10m6,10lv,10kk,11rw,10xv,1134,10wt,106q,10jb,10v6,10tr,10ko,10vo,10p9,10gy,zte,z7m,wxs,ue5,vps,uw8,uxk,xu1,woy,vlm,v9u,uws,sz7,ssa,u1a,tjn,sqt,rlj,pdf,owr,p7s,pql,rch,rws,rox,rxb,t5n,u8v,uxk,ug7,ti0,tho,u6x,tzo,tev,tq0,tdq,rkm,rl1,qol,r8s,r0a,rd5,pqo,ql9,q0m,p11,p0p,p3s,pfq,q55,qzd,qed,qoc,s21,s7a,sdr,wlv,wjz,uqn,t5z,u3x,twe,sui,t4x,rhe,r2b,r72,sdl,t37,t2k,scx,sih,t5q,t0o,t7x,t93,tjr,t08,sgl,t77,sy2,t28,s0y,r3b,quc,qwb,r93,qy4,rh4,qs6,pct,opq,o6v,ok0,pgv,orn,pls,pxk,oxb,om4,peh,odp,ogl,o5n,nyc,oqq,oae,odm,m1h,kbh,l7w,m6r,myi,lxu,mki,lbb,kqk,kq6,haj,djw,gdu,g0o,ff2,gah,gqh,gco,hl2,i11,hzl,j7w,jn0,l4z,kff,i6u,i1w,hnu,grp,hiv,iix,hkq,hhy,gqt,h6o,hn5,hac,h19,h1l,gxq,h6a,i94,jvn,i39,i51,itj,i7k,inv,iy1,iy8,i9h,ig3,iib,ids,iag,joo,jo7,k41,lbk,ltb,l3l,lbf,l38,lbs,l8u,mdx,mk0,mw5,mto,m27,lvt,m5z,mhf,m0d,jup,k81,kah,k5i,kqy,kl2,j1o,j1c,j95,j36,jjf,iqx,j5u,ivr,j2n,jkj,jnv,jlf,k5b,js5,jnv,iyv,ite,i77,ibh,iaq,hef,gyg,h8b,hmp,h6v,h8k,h88,hcp,i4m,i1i,i7d,huy,hh1,h0i,hjh,hej,hev,i8h,hyj,i6a,ijy,ifu,i7m,hpg,iap,iuu,iq7,ikp,iox,iot,i93,ia7,ibo,i71,ia8,hyw,hwd,i2j,i6b,ijk,ifs,ikn,iac,i9s,iaw,ia8,i9d,hyn,hpd,h88,hdw,hdl,h8y,hc9,hdg,h8l,hnh,hp5,hmz,hpq,hqd,hza,hxv,i9r,jef,j4t,j7p,iw0,iy6,ium,j26,iua,ijx,ip7,iqx,jep,j7u,jsx,kcx,jws,jnn,jrd,k3n,kxm,krm,kk7,kvm,kt4,m18,mog,o18,mkx,m7a,m28,lhp,lly,lef,l8o,ljb,lch,lfk,lcx,mbn,mc7,mmr,mpv,msl,md6,m8o,lyk,lqf,lsi,lrv,m0h,lsa,lj0,lkd,k69,kju,kfx,kxy,kou,kf9,kjw,k7m,jz9,jwp,gt9,hj6,i68,hyo,hso,hn7,gcs,h6i,hg4,hcu,hwx,hqf,ho6,hst,hl8,hpi,hiv,hu6,i7a,ikx,ikf,iu9,if4,if7,il1,i8j,hsf,htj,hs0,ho8,hzs,hzq,hx4,huo,hhx,hsn,hr9,i2w,i6a,i3n,hzw,iiq,iba,i9m,idr,icy,ihy,ihc,ilc,j1y,it1,ir3,iv1,iz8,j6d,izl,jbr,jj6,jnh,k9u,kzd,kbw,kec,kwb,kok,l91,lhx,lvt,m2l,m4e,mt0,nho,oao,pch,o8k,pg9,s4u,uxo,vac,tnm,ss2,ttm,sqg,tcy,q2f,nu4,q1k,q0w,pp5,oop,pjt,pwx,pwm,p67,oua,p5b,oz8,ox9,oos,pds,rhm,rpz,rih,soj,t4b,rz1,rpu,rvd,s10,u1k,uck,ui7,vxg,w83,w2t,z0q,xmq,xio,y6j,zum,z1i,z7c,zqm,zlo,y47,xro,xl3,y5n,z6c,z5w,w9q,wm7,whl,xa6,wvg,x5k,xjg,xis,x6u,xg1,xdv,x8c,zfl,z1h,ypl,ym2,ynb,y35,xcv,x5y,sdq,txz,tig,tp3,t6g,wge,vky,teh,tt9,v4p,u8v,u6i,ug7,t8i,t8s,t3y,s9m,sn6,srx,sei,u2k,tns,swn,sy3,sm1,stj,t90,t50,thx,u28,vc7,ut3,veo,w1o,wi9,wdn,xys,xuo,xre,wer,wps,wq1,xbc,xen,xf2,xs2,xe9,wn8,wcn,vhb,unn,v5f,vvv,vqv,vty,w4i,wdb,vnm,vrx,w0v,w1j,w6e,wat,vju,vkg,vsm,vrc,w56,w7e,vws,w4l,w5u,wtt,wms,w36,vum,w3g,w6w,we0,wev,wde,wlm,wjz,wir,waw,wb8,wk3,wnr,wzb,ws7,wuy,x8g,xcm,x4m,x5i,xrh,y5m,yw0,ykt,z0v,zr6,zwk,108h,ye6,ysy,z9h,ypq,z3x,ybx,yuj,ylh,yo6,zmh,zlk,zlm,zre,yt0,z0u,z5l,za4,zck,zk6,z4i,yzv,z2h,xrw,y4w,y9k,xzs,y9x,ydz,yrj,z2b,10em,14yr,14pf,155x,14yu,15hd,15kl,17zu,18b7,18dm,197e,18mv,18zq,18j2,18ql,1apt,1fq7,1icg,1gun,1hmk,1n7q,1lvd,1mid,1n5x,1jqy,1fo0,19wb,1cfk,1f8t,1flz,1cn7,1ebs,1dxu,1d9v,1g10,1g9z,1i82,1f4f,1ggg,1fk1,1gad,1ddx,1fbd,1eay,1e5g,1e6b,1fp6,1esp,1ezv,1fg4,1fc0,1gjx,1g3c,1g22,1fhn,1fgd,1e74,1eq2,1f17,1ejs,1eif,1en0,1ems,1eqk,1ekg,1c7k,1asr,14nu,180b,190y,18uo,19l4,19w1,19nf,19d5,19it,19hr,19b3,1960,1837,17ps,18mp,189i,188e,18ac,18w4,18tb,194x,18yf,18ni,18g3,18nz,17zw,18dj,188v,18f6,185n,185i,18id,1abp,1b3y,1avl,1bas,1bi6,1cnj,1c2i,1c7f,1axl,1aw3,1ayt,1b0t,1aub,1awd,1av6,1b6p,1azb,1axx,1a27,19yc,1aha,1ai5,1acd,1ati,1aoz,1anp,1ap4,1azb,1bhh,1b7b,1b9n,1b2h,1b8f,1b7c,1bof,1bsa,1bm6,1box,1dm2,1d4c,1d14,1dcn,1d68,1dlv,1dbe,1d1i,1cl0,1ci4,1coj,1ei3,1eb0,1e5n,1eln,1g3b,1gz0,1h9r,1j7d,1hyl,1hxe,1kde,1l4l,1h8i,1ifj,1ije,1j8m,1ihm,1ixc,1jo6,1j1p,1j82,1ib5,1iaj,1ig4,1iyr,1l99,1kqk,1lu6,1lyp,1kcr,1ktv,1lps,1l70,1kw7,1l2p,1kop,1k5i,1kc0,1kgd,1l9o,1m5j,1nla,1n43,1n4u,1m2r,1mko,1n0z,1n8e,1nk6,1nu3,1nga,1o2j,1o3p,1ny8,1nw2,1ocv,1oxc,1p07,1oz8,1ppm,1rxc,1u8q,1yn8,1wrg,1x4w,1xow,1zg3,23m4,2342,225y,22rl,24y6,26h8,27od,2fje,2576,1wv2,1xpl,1yeo,1xpr,1xy2,1otr,1q9z,1rsj,1r9x,1rmf,1s3w,1xwr,1vzy,1xma,1x2l,1zbz,1z6f,1yx4,1why,1x41,1yqb,1z0t,1z79,1ynf,1z0f,22qa,2475,25r6,26ca,27rn,26a9,26yk,29aq,2979,23tv,24wh,261e,25na,255n,263p,268e,2801,29or,29ub,29p3,2c05,2f3q,2f62,2jqe,2jh1,2guw,2j6j,2k53,2jp4,2mse,2pg5,2rhk,2pwu,2qh7,2qxt,2n94,2gwe,2k36,2crh,2isy,2n1j,2nms,2o6m,2p49,2iwa,2aq0,229t,26py,282o,2dse,281e,27c1,205e,22qe,22aw,28h0,28n8,2881,283b,2bgu,2c2g,2db0,2gbm,2g40,2fn1,2k6c,2jyd,2je2,2ln7,2lhp,2mw2,2lu3,2ih4,2im1,2ipg,2ik9,2jyu,2kr9,2lbw,2ncs,2o8u,2nyb,2og8,2p0c,2qr6,2s1d,2vul,2w0f,2wrg,2yms,32vi,34y6,398l,3atb,3a1l,3de9,39rn,3m0t,3onn,3tje,3xml,3nj6,3tc0,3ugz,3q0o,3rkn,3vkb,425t,47tf,4e18,4dt6,4geu,4u69,56cd,4yzc,4vvq,4dqm,4rqi,4wag,4n86,4xfb,556d,5bba,5gq3,5etv,5r78,65jy,5sus,608w,60fb,690x,6dhp,5pnz,5svu,58ke,55y5,5b2s,5oos,5dj9,5jtg,5uwb,5nna,5rax,5r8r,5hp7,5cq5,577x,5f8r,5hqv,5g0s,5993,5651,5ecv,5gwp,5kli,5l8q,5kv4,5ckq,5h11,5ddl,4yyp,4yy5,538x,50ue,4qwb,49ir,43fn,4qyv,4xrc,4u5n,61w6,5ppy,62cf,5wfw,5wl8,5hfh,5emg,5pn7,5zkn,5stx,5w56,64vp,5ug3,5rkn,5z9b,64p7,6xsu,6x8k,79rs,7cbs,769u,7d7b,7ug4,8ap0,8pkc,9858,8wzn,9cs4,98g4,8t0j,8x0h,8r9h,8k2n,8qdl,8vz8,99s6,9bw1,9b12,9b96,9dy0,9uz2,9twn,a5ro,ajhl,9ujy,9ww2,9dk3,9jod,9vio,9xnb,9baq,9ajb,94ug,911j,8xbk,8bxk,6ykr,7xfm,7ycz,7yeq,8quj,8ewu,8clm,7r3w,7r9d,83bs,7vpm,8ede,8c5t,90ob,8z4p,8wlp,9age,9e4h,9ehs,98ao,91d0,99ae,9cvk,9ii6,9uzu,a8mx,a5to,abix,bk6f,c16o,cefi,c717,cc5b,bzcy,byur,c8gf,cv14,cxal,cup8,cmc9,btr6,cale,cn9s,cdd7,ccmn,d8g1,d45y,ds0z,ef0h,f3i2,ffg7,fwki,fsre,eyzi,f98s,fyxt,f97i,e6uh,dlps,chry,dz1l,e4o5,fjzd,gsga,gkdj,gpjz,h6p4,hq3v,hcds,hojk,hatb,hn7u,irxt,jz4m,kutt,ladf,l06b,lfcn,n60w,nfqm,o19u,os51,p5m3,tzn1,10i7x,yxll,w99m,x624,105yu,11d7l,zebf,zl35,11xw8,163gz,159dj,14onv,11u51,z9kj,xibb,unu4,vyj2,u2a3,u6hq,xpij,wzf8,umkx,v8d3,rr4o,tu6s,suxt,vmg8,w679,waty,10fij,10npz,ysg1,w0ku,utgj,vfvh,s9hv,tk00,ui37,tbmz,t4qq,oi0w,nx2x,o3r0,oiqi,rd7s,ohcv,n0hz,n957,o272,nuty,nnib,o9j5,owak,nuzr,lchf,ljgy,jdir,itxs,jkmy,hom5,eoii,gl48,gcbg,hm5e,ik8t,ia79,hcqx,j3bj,i9pp,kai2,lnu9,lu7o,nrdc,mehl,nvio,o3qp,mf0f,l67c,lrvn,krf8,kkzn,m3ph,mu2r,m3am,nevf,nlum,ohm0,okgi,oqhe,mvug,l84l,jzy0,jvwm,itz4,ke2i,jlut,jmty,hmf9,hq0b,hyd6,gw5i,hjva,iapy,j2dv,j15j,io4a,istz,igff,i3a5,hihq,gsq7,h05w,f8i1,en67,eu4k,el1g,f2ou,fwlc,ej6u,ekki,e62h,erd3,f0w8,eftl,elzc,evv3,gxwh,gz1e,h5s2,hvoz,h8wq,gwme,hhuj,hqch,iy26,izwy,iv34,j53q,korp,izan,juvd,j905,k0ti,k52s,js3d,jg0h,jq71,kwda,ks74,kzux,kkd1,k0n3,jqtx,jx20,jdc9,i1o8,i6rm,imz3,il2b,i6z2,huko,h96k,hn9p,hmzo,i8qx,i01i,h5v5,g4bb,g8je,fwy2,fpau,fq7v,f8oa,fz4j,ft17,g12a,g48g,gdb5,giaw,g1o9,gba3,gec6,gfib,gc5w,g71d,egfe,eoi9,dzlq,dim3,e7k1,dpsv,dx6k,dtql,ed9p,efhf,eh2x,eejp,czk6,d8en,d69l,ddr6,d2dp,d5pb,ck20,dc0b,dnxu,dmuk,e5wl,dxev,e3nx,e09m,e552,efwa,edcs,ea76,dit8,do4m,d79n,db37,denb,dls8,edt5,fouz,ft50,g05r,fpdi,fvsx,fuy4,gjds,hzyq,hkxc,gyn5,hiox,hjz0,hn01,hijk,gk2p,ga5y,g5zx,fvv2,f0al,f2k7,eupz,eepu,dflf,e20y,d5fr,dj67,dj8t,dfh5,d983,dft9,dheb,e2es,dprt,dwts,dg0v,dvgs,dn4l,dyt5,ecst,eghc,ec6z,enpo,f7ap,f2pb,exko,f22a,feyr,fm8r,fjzn,frt5,ejzm,dwmg,dqht,d9gb,de71,dhr7,dgg2,dk8i,dwub,dx4u,dzep,dxcc,dewz,dl83,dol7,dxfp,eg5e,edec,ed7u,e3g7,dr3g,duph,eb9q,e71l,e42a,e5lt,e2b9,dy7s,dusu,e11d,e443,e1fs,e2ix,e5md,e4ir,dzse,d791,d9r4,da7t,d92o,dt4g,dulu,dt4h,dpk0,dois,dqgp,dr0e,dqg3,dpin,dqw4,dq08,dq57,dqjx,dqc7,df9c,dfyp,dilk,dlfe,dltt,dkm3,drei,dq1z,dt03,dxlz,dqcj,dkj6,dm7j,dkud,djpe,dfmy,by42,bvcw,bs2q,bsgt,bwnm,a9ro,9955,9r10,982i,970d,85p4,8gjh,7xil,83eg,90q8,9334,8il1,8w2f,8s9f,88lq,8cdr,7y88,7izh,789g,7ayj,7l6k,7be7,76oo,7c4d,6zki,6utz,6trf,6uk5,7hzw,7udd,7xbh,8pva,8885,8hxr,8g7v,8nqd,828u,85su,7onm,8bgp,86zu,8765,7wi8,85u4,8csc,8407,87c0,853p,8o6v,8kpy,8k2m,8kyy,7rxi,7rn4,7r3a,7iqb,7uxz,7oc1,7qbf,7svh,7qi7,7wii,7l0n,7kt6,7o0z,7m2d,7n9z,7msn,7mgo,7kyp,7d1t,7a0u,7d9q,7b4l,7dtl,7f4i,7bcm,7b83,7cdz,77u7,7767,7qqo,7rf3,7t0q,7p1y,7oue,7nxl,7mu8,7n2t,7olm,7rj8,8ab9,8cko,8fd5,8cbu,8gni,8t53,81oa,86wq,84wy,855u,84nz,8613,85yc,83um,7xco,88b1,8980,89iw,888j,8dq4,8d87,896t,89r7,897w,89cy,8d2n,8jus,8i3u,8ia8,8kch,8n0a,8it7,8jed,8j8i,8idn,8dk8,8eao,8mq5,8lhi,8rjm,8rqd,8rx4,8vbm,aidg,amqf,aiyf,asd7,at84,b4e7,bbo6,b4w6,bduu,atpn,aw72,avkn,b1wg,at42,b5p0,b79n,bbai,bc6b,be11,bcmd,bjf0,bvue,bn4r,aznj,b1e0,b3tx,b19v,b1a8,badi,be4e,bk4x,c4lv,cdkv,ca03,c769,chim,cpp8,d6jq,dmjm,fp7g,evp2,gprn,h1us,hlw1,gun3,fpck,flkn,hm8m,h3tu,h419,gfnq,gxdf,h4ae,ha1b,ipq8,iwb3,iort,ijv1,hq8q,ic7a,ic3d,iqpv,hinw,ge9u,gpqm,go1z,h74r,h0n1,gd1r,h4rm,gzaw,hglw,hn8u,in54,iywy,jby8,k0q1,je2x,jwfu,kgmo,lm1p,mwhe,n4wj,nl39,p4sy,rkju,nt8k,qhkd,plmr,n8me,mnjv,n2ps,pm82,nyf9,nkn4,o0tz,ojyq,qel6,qylz,py5y,o7i4,pbis,obj0,m1g4,nf32,kasq,kqio,mw2d,mko4,na61,mp3v,m46o,l5bd,kzm7,l7o7,l306,k8wr,kfbn,kdcg,kjwf,lk5o,mahr,mkh5,n64y,njq3,p9q2,ohfy,pnef,pl5r,pezu,o879,opoc,oeg6,nai9,lhhi,m3j5,m8es,lvl8,m563,nbv3,n34j,ln2r,loub,mbk6,lqyd,lnck,m7l4,lsl2,kudc,kbnr,kj0o,kl4m,kxba,m8py,mrcm,mo58,mode,m54t,mhrf,mb13,m59a,lm8j,lqkn,maq8,m692,m7nd,m389,lzhy,lup5,ls1w,m0bb,lsqd,lek1,lj8d,krwa,igmv,i20g,hccy,hjp2,hkva,ha9f,hr2l,htjz,hx99,howq,hi2h,hg7n,gu2d,hmq2,hjyc,ifg9,idw1,hrnd,hu9j,hrr9,hw0d,hhon,h5ky,havl,h259,h1b4,hlrv,hlm5,h7jd,fzgs,fz6l,ijya,jtph,khig,jz2m,k7pt,jojy,jmfc,jtua,jxlv,jqmc,k6q4,jzyv,k1tx,jqpf,iucd,ivue,jdr5,iobd,iu5s,isg1,ij34,i58c,i655,i89g,hjg1,heaq,hb6v,gbd8,fljc,fp6s,evr6,fauo,fcw0,g4ry,fxsi,glti,g71f,fwct,foon,fnrp,fgpq,fvax,g5cd,g3mu,g4xq,fqdj,fi15,ffla,ff05,fj0q,f5lz,f8pl,er1s,e5y8,fm33,fbeh,fec6,fay6,g144,foy7,fiaz,fevh,ff54,fif7,fns8,fuc6,fhto,fd1g,fdaf,ew0r,fogb,fqlo,fqs9,gn7o,hfs9,h9w2,gr6a,hfau,h7r5,hhzb,heox,ixc9,ivw9,ioql,j3p2,j4wi,imbj,iidm,ipof,ij9y,hxjy,i1yb,hvvx,idkb,j2vo,jxe3,jyij,kdpo,k20g,k3wt,k0mr,jw19,jmwz,kmwu,kvhk,l070,l8rd,lr9g,l5r8,m0ly,m7e6,lxry,m7ia,l8sk,lbwl,kr5g,luoa,knio,kltn,kslg,kqjp,ldic,kog1,k10d,iuxd,ite7,ir77,ie75,ib35,j37h,islt,irn9,jf9y,jlsl,j2lj,hdqp,gxaf,gyc1,h0lq,amnv,c28h,b105,bhh1,aqst,blyj,bk35,dao3,d8ef,d8j3,chw0,dwht,eirm,ec79,eh6e,dwu0,dcum,cnme,dsob,dsbq,e8l3,ek4q,egza,epbj,ejzd,fn4p,felj,fsub,fn8m,epb2,er3y,eyh7,epli,eqiq,e784,f9zf,f6ek,fkef,fbps,eosv,eq4i,f9ny,g1tp,g378,g5m6,ggwn,go45,gnj2,is2g,ijmh,izaq,j8ow,j2hc,j1c3,j9cs,jv15,lf4f,l4r0,kizq,iogf,iexp,iwcd,jzd8,l09r,jzo0,k4yk,kr3x,kuj1,kwn0,ke8i,jfr4,jmxi,jom6,ivhr,j3fr,ixq2,jnhm,kiai,k7t5,krtc,k7xe,luyy,kdz7,ko03,l17c,knz1,kq1f,kw4m,kxt2,kyl2,l6zw,jvup,k9n4,ka1h,k0wo,k8i2,kekp,k92d,k4jb,jwif,k20h,jwf1,kr9q,kln9,jx1q,jtig,jmqw,jam1,jis7,jont,jljx,jt2e,jhq7,jfl9,jk6m,jgl5,k0li,jtwg,k7z5,jsb2,jwga,jsqt,jwr2,jspa,juj8,jpmh,jkob,jmin,jo0n,jrbw,jncf,k4fd,kffq,klg5,kgqi,ksn9,lai7,nocr,nghp,ntp5,nv7n,oav0,pab2,ns0q,o2ze,o0eh,p4fk,p84j,ouzd,p63h,p19w,pfx9,of28,ot67,p8g1,p8ip,pfnn,pi6k,qeag,ppd2,p5md,pfpc,op92,p1et,p04h,p8ad,ocf9,ol6t,o91n,ophw,omms,p2p6,p13v,pnn0,ogr0,lzs5,mg0t,lpj4,lz5e,m7zo,lnzk,lwtj,m5fb,m9gu,mdbm,m4ho,muqo,n3qq,nibk,nful,neln,nqgi,neoq,meqq,mjps,lxlu,n0mo,mwcr,n0uz,n25m,mzqa,n8ia,n377,mqeu,mnlf,mmhf,muyq,n380,mpmd,mv33,nd8t,nqhe,o84t,odya,or2w,oibt,ogy7,onjm,oax7,ocrc,omjm,p6b9,pkhe,rje9,ruw6,rrhr,s3vf,ryas,s1b6,tb7k,shhl,svr6,t5my,tldf,tfy2,t51g,u00c,ua7n,xg7b,xh61,vv3g,x7zk,wu32,wu1k,xptw,ywxh,z01a,yift,y9jn,zvwh,11wd5,125th,126wb,1403u,143er,13m4t,13dou,151n5,146mv,10oi4,10nkg,1218q,12zm7,165bd,14c7h,156mn,15qc7,145g1,14yw7,15hjj,1543u,13b76,13t8e,137n1,12pnk,14bn4,1523c,15c6b,15nff,19sz4,1cufj,1degc,1f4st,1efh3,1d5v2,1ex3d,1dyef,1etaj,1gvhg,1kr27,1knf2,1lydb,1md68,1ptnx,1q7ej,1qz11,1wmvw,1zbqg,1w5vb,20wh1,26jew,2c1wd,2fe90,2ej0s,2a5ie,23lev,2099r,27xtj,2bors,26ol4,25jge,25b6a,26fmu,25p2v,244e4,1uhqv,1yp90,1wnxo,1x1t6,1xhir,1xykg,1t2id,1ztqx,2189z,21mgg,1z2h3,1zyar,24am7,28jkd,27kwo,29jlp,2cbml,2blhp,2qush,2rrog,2om91,2unfo,2tv2h,2t6n3,2wnqf,2v47k,2xbp2,33xpa,32pcf,3bn4y,3bqbq,3f8s8,37mz3,2w2y9,2y8n3,2tydp,2r39l,2q8m3,2p7yi,2ydth,2vj7r,30nav,2vw6o,2wlhu,2wyl8,31huv,33n68,39bp6,3c9xw,3fzit,3evyw,3nd2n,3keci,3cac0,3d3lp,3hs0j,3fql8,3goa4,3gufo,3f4pl,38pmq,38y5l,34qad,32heg,39hru,3c2io,3beug,3fe83,3hs4n,3i0fn,3i2i2,3iiwh,3erxr,3gqws,3hxmp,3ghsn,3clkr,3g8ha,3gfaw,3juqs,3kggd,3kede,3rzhw,3qr1i,3riy4,3nyuv,3l7aw,3cv1o,3bleu,3d1l9,37sno,3378u,317pf,2zrmj,2wwrq,37man,39xwv,39ff6,36t9g,3frcw,3g0s7,3d964,3eowg,375dn,3ewjf,3d5of,3ewgr,3hw3x,3gxkb,3bthx,3dc7u,3191w,2xtb1,2z5to,2su8s,2qn4a,2l7w8,2jpol,28oik,2fg3o,27oe1,28ol2,22j71,2asqp,2a0wx,2c0am,2ajim,24ans,22c2e,24ext,27z35,26kt6,28oa2,2bxm7,2720l,23w7x,24k7w,20a8b,1zqy9,283pv,26xig,27p8r,24g91,2bfi6,2epko,2ea2h,2a0l6,29hjc,24jqf,247im,24awq,1vz5o,1xfkw,201ei,22aax,1vwpq,1wcp8,21yjd,21ohf,250o2,235o3,1zt9o,20epj,224ue,23s21,20onb,2150u,20q6i,1ycdq,20ow0,201fr,21fec,1z0qc,1xyo6,1yaqc,1vykx,1vf50,1vm97,1vyky,1u6zf,1rst6,1wuda,1x8tk,1zo7s,218c3,239ve,2899a,2bv0u,2dlq7,2dx2g,2hkif,2hksj,2do0x,2c8qb,2a2dv,2d8z3,2fr2t,2jpq4,2nch6,2m8xa,2r5vo,2phxr,2pwep,2n6db,2u9wl,2t04l,2swa5,2qk7c,2nu5u,2ocp8,2rzam,2xjg4,2x6a8,2xswc,2yagg,2upze,2x11k,2t58a,2x4ls,2wphb,2wwvn,2t08x,2t7gk,2wcty,2xtdr,2yv9h,2yzti,32wvg,34trv,2sfb4,2qzvy,2rk0d,2ny40,2ontv,2qzbh,2ofkg,2ssae,2v8lr,2ug2d,2t71f,2vbg1,2t7ef,2jur3,2ev1l,2legt,2o5iq,2jqq3,2jlh3,2kg15,2j32n,2gcuj,2gulv,2lu7f,2v1qd,2ufos,2vbc6,2xn4i,32i8t,3as7w,37bms,37ljd,39wo4,398s0,3esgn,3cg4i,3ex2h,3ezs4,3np7k,3mljq,3nqge,3ou6i,3tspu,3xld0,3post,3m7kp,3na34,3mgep,3r3jz,3lg12,3hiry,3lt6x,3pdrd,3oc44,3no75,3mxwa,3r30r,3qxpq,3nl6l,3mr8o,3npwh,3r4hr,40rk0,3zt4n,3usm0,3v8kl,3tcd5,3u0yr,3vdx3,3sn92,3laii,3kxjb,3dq9k,3gce7,3k2ar,3iizi,3cul1,3fjpf,3eh3b,3ih4y,37ba6,393qc,3epbt,3g56v,3edmt,3ek31,3d9yp,371bu,2xd6u,2xq3p,30bc7,30ecn,308nl,2uqwm,2toa3,2xpox,2zgk9,2s9z9,2viac,2wnsm,2u5qj,2rb6w,2sj7b,2sh0b,2sn1w,2x772,2wd3u,30p1d,30ui7,30fl1,30vmf,30vh2,2u6h4,2rlo8,2syg6,2rcs8,2txr5,2thqw,2rkdb,2qe4k,2lava,2kh35,2gz5a,2hlal,2hrze,2hmm7,2jo0i,2m81z,2jd3z,2kdtl,2kluj,2kixi,2ih1j,2iy0j,2hkd0,2fcrh,267rh,230c7,25qox,26kol,277a3,26xhy,27cmq,28y9h,29mwt,29etr,2afsr,2b4wc,276hl,27fdx,2g1qv,2gytm,2isdr,2m2hu,2mnzc,2n6bf,2lhay,2isb8,2ie4i,2iftz,2jelk,2nek7,2mg4r,2f1hm,2dtty,2dxth,2amnu,27ii4,29vqb,27yq3,2a1zv,2ca8p,2bpmi,28q8e,2kjqd,2n0va,2m9ve,2j2rh,2btgx,2cevo,2aawu,29rf5,2b02s,2hzx8,2cmgy,2b7s8,2bhhl,291b4,2czc9,2ccsh,2g3fl,2fszm,2hnbo,2ifn8,2gibk,2g0jv,2iub1,2jle4,2m93n,2n1u7,2nf6h,2s9cp,2t7st,2tqbn,2t022,2pnlp,2r4p6,2qgqu,2rjdi,2s0jg,2pxp4,2ktfi,2ldt5,2ihvj,2jhab,2il5a,2cr8j,2dxut,2g7d8,2djz6,2ev3x,2eoc7,2d3n2,2fhls,2gxd2,2gq3w,2eppy,2d679,2cu79,2coql,2eqz3,29lps,2c24e,2d6z3,2ar4n,28u1d,2afj7,2anry,28tah,2cys9,268ii,2593g,243vb,21003,1ta5c,1uf9e,1ppyg,1q80v,1qrpt,1setm,1uu2e,1s2ap,1t8mj,1po02,1supp,1qmyh,1r22g,1t0f8,1qcgp,1rjbk,1re72,1qvb5,1pbpw,1q960,1r2u7,1w0rf,1w84l,1rxds,1tdq3,1rksb,1rusp,1s4ad,1v5q0,1uthb,1ssfy,1sfsh,1qb34,1osbz,1li8k,1btxm,1bb5j,1c9pr,17j56,17v31,14r4b,17x72,183bf,18cbz,16vgd,197v2,19ng4,1a0ia,195ie,18h5t,17fiq,171gf,15fqj,15gfe,157xr,15bdv,17co6,17a4m,182hg,1aemu,1ar5v,1a9ip,18ncn,16szx,15g7v,1777l,181ve,18ndw,19fj7,18n39,1bt4b,1e3c0,1dwda,1dmg9,1co0g,1c6wu,1cjy0,1a3qd,19edy,1d2uq,1f3e8,1fc1u,1emsn,1e269,1e09k,1dd47,1cw0f,1ci0h,1dtwh,1daek,1dmjq,1f0p9,1dp2d,1f9wy,1fask,1gafj,1gcqm,1g43g,1fmbv,1f5qa,1e0n7,1drr9,18t6d,19bop,1a748,19nlo,1a5m3,19x5t,1a9q8,17e7d,16ylr,1660q,17g48,16hqq,16x43,173ci,16r9i,16g2n,16s9r,16flw,14e6f,15cnf,15eo8,19sej,1ajk1,1akwt,1bxpl,177y0,17e7x,167tj,16b9q,174iu,15n06,15x3q,14g8v,13nzo,15m1a,15f9q,14k8t,14a38,155kh,14yaa,15p5i,15vs7,15nmn,15e42,14r89,162xb,17lfx,1776e,16re7,15vne,15m5u,15n3p,151yo,14t2w,1525n,15jz3,153rd,14vfv,15a8v,15x12,15ge5,1508v,14smi,153jk,1562j,15xod,15gea,172jc,18kpj,17gtu,185v1,18l8m,186sm,17x32,17wjx,176ng,17ahv,19ci4,19m8r,18w9k,1832x,13p35,xrx1,11lik,109b9,zy2s,yzaq,zn50,104l3,zpgp,zqny,zpm0,zs9s,ytm4,xtfu,ynwp,ziv2,zjlc,zevj,z96o,z87r,yqyy,z8r4,10tdm,10cqp,10liv,107z3,10p4b,10cqv,10l64,1040p,10xl6,10q8f,10pb9,10n0c,10utc,123is,1267g,1169x,zlc3,zybj,zygc,z7al,1085i,100c5,101e6,zysk,10375,1027o,106gq,zshv,zfy5,zn83,zkdl,zf0m,zldv,zrpk,zq9s,10411,1027k,10ch6,10bav,10kas,10tso,11d7j,12823,14fzu,16l2w,1917o,18qsx,19eah,19e4m,18dyv,195wv,1ckig,1cvi5,1coss,1d57q,1cgop,1dj3w,1dbd1,1dg4q,1dbdd,1eyho,1cv7r,1dkq5,1eusw,1edpc,1e939,1e24g,1d7e3,1cr11,1dv8j,1d5vi,1ari4,1ac95,1av3q,1any6,1aq00,1bmoy,1g3ct,1evz9,1gqpq,1gsyt,1g863,1h5ew,1gaqv,1fshi,1f8wr,1do9a,1dn0u,1egiq,1edlf,1dlyb,1elt6,1eayj,1bwjm,1bvbp,1c1xa,1c1j2,1bj09,1aihm,17m79,17drd,184d7,1bame,1frrn,1h36u,1gbh0,1hock,1mu3r,1lu8e,1oes8,1nnpm,1odts,1mlos,1ouf9,1mv58,1mx27,1o4az,1m7ak,1mh8s,1ouj5,1o25o,1p47g,1p2nk,1oczs,1nozu,1o9ac,1of6f,1o4a3,1nvm8,1nxpx,1os3p,1rmph,1stvq,1s43o,1t3fe,1ta89,1t17i,1syyl,1r5vr,1t34f,1ppyy,1ojvs,1mhv6,1nn6r,1n5zp,1mzh0,1onul,1ou53,1r5kr,1qwq1,1qmqv,1qxld,1o9d3,1phs2,1q94o,1puj6,1rcbl,1pxwa,1pn9q,1nfg9,1n8wj,1n96g,1lu9v,1ldue,1lj3g,1lp0y,1md7e,1lxbg,1mqa0,1lj8k,1lmt2,1m346,1le4u,1lkfm,1mcu6,1kgin,1krl0,1l9ra,1lk3y,1o80o,1nid7,1neb5,1mc4o,1lhux,1mf0z,1m1gl,1m7jl,1j9nd,1mbtt,1kgdi,1kufd,1kqho,1jfm9,1jizf,1jiz7,1jgza,1hsjj,1is5m,1kfry,1ktuh,1khhg,1le7i,1oo26,1sihs,1s75f,1to2j,1th6e,1tavs,1suk5,1tqac,1siuc,1tadb,1tc76,1tjp5,1tkny,1uqf4,1u0jf,1td86,1s991,1t09o,1sv5m,1sneq,1t59m,1tmd5,1t4kh,1vdiq,1sysb,1sx9d,1su35,1slwn,1ry53,1s43r,1rvtd,1s4m9,1rpo9,1sfy9,1qjf0,1qmq5,1qxjz,1ql7t,1qu27,1qxgm,1qpxo,1qmm6,1r87b,1qgp7,1qkhu,1qa2l,1q9r2,1q9d0,1qic4,1rtsv,1remu,1r2ug,1r0i2,1r1qd,1qrqc,1r17l,1qil4,1pmp1,1l554,1jt21,1jxfa,1k3sf,1k04b,1johp,1kp2b,1jzyf,1jtbs,1jqnd,1jwu4,1jy54,1nb7a,1miek,1jmov,1jayf,1jg0e,1jna7,1japd,1j9do,1j793,1k6f8,1jiti,1ji1i,1jd62,1hvfk,1jfci,1k7of,1kx2u,1l62m,1kx1o,1ksxv,1ld67,1mbxd,1m5mk,1kya0,1kz0j,1kylm,1kcag,1kcgh,1k56m,1kg3s,1lxwv,1lohh,1ltm1,1nwnb,1n2zx,1mt7u,1nkul,1ms8b,1nw0k,1nye3,1nvkx,1n4yn,1mrq4,1li2p,1lbdi,1lj6d,1lkon,1m5dz,1p3lj,1oxx5,1opt4,1phrg,1ro1v,1s4u7,1s9lc,1ymrd,20m9s,21x5u,219gl,20ni6,212iv,223ru,21xnr,228kb,23xy6,22rl0,22e3q,237n8,238q0,231zg,23wwo,24q6l,26lvx,283al,279e1,27f1y,26bp3,24a70,293sn,25i5k,26dqj,26eby,2893l,28er9,258hb,2861b,27yzo,28uee,290od,28c6n,27sml,292v3,294a5,28txj,2aydv,2ckxg,2doqm,2htti,2mg8d,2lrg7,2krpi,2mqvt,2lr01,2lqfr,2gbrx,2gvmv,2k176,2k8gi,2hz1u,2igf5,2gsnn,2jdsl,2ilpu,2lglg,2m11s,2mbsm,2lt81,2kdg5,2li13,2j2mw,2l3m8,2jgho,2i0ms,2igip,2ihhw,2mevn,2obok,2jofp,2muer,2mmco,2m4qe,2lz1g,2sp3o,2qrv5,2scig,2rerr,2jrtb,2ju3b,2hs3z,2j5jw,2kj4p,2jhxe,2gfsf,2h6el,2hb6d,2h10v,2ctse,2d65f,2dya2,2dk2e,2hpzt,2iaeq,2hzfi,2kmqz,2k21p,2ja83,2k7h0,2khw3,2k4ji,2j97h,2jciv,2kdtr,2mul3,2p5uh,2t475,2ufq2,2vb74,2z58k,2ydbt,334bx,33bnf,33shf,32r96,33rrq,331a9,34445,32wm8,31xqp,30uwy,32jsv,32ws8,38x8v,3e9zx,3pvi2,3nl92,3q0ew,3ozs1,3r0g8,41y00,3t2gc,3xolg,3zr6m,42hfn,42tor,43mzl,4aqu9,493s9,4cn0e,499dr,44suz,3w8w8,42cwt,4198h,3otkz,41f6z,3waiq,3s2nc,3ty58,4083h,464h6,466pt,44gqt,47t1e,45uu0,45b8d,48ny1,45l5n,3wgm7,3xqn2,42opy,41jkr,446kn,44qdg,49pe8,441tq,479y1,464tr,3ztbn,3ucu5,3wpht,3rvgl,3spo2,3nft2,3s4h3,3snyf,3v4bz,3v8z7,3zhh8,3yabm,3tkxh,3ua1f,3sp3n,3ry8j,3qzgi,3sz7b,3lyq9,3gm8y,3itlf,3qzum,3sx3l,3tbhk,3ripm,3pql0,3mwwn,3r0zt,3mitc,3mepx,3no2f,3qsdy,3nxnp,3y2bd,3vw7i,3zie4,3zk0w,3y0m3,48lzw,46hzx,441ur,418ap,431wk,44hw7,42p91,44mwu,42hd6,40uu2,42jvw,40ewg,414vf,41bwl,43j7m,477zl,48d54,47q2q,44m60,44k03,459rm,44w0y,40e62,427ev,3z51p,3xf7v,3xwei,3ysms,3yhxg,3vk30,3v22n,3v3je,3tcwt,3tq6u,3rrqe,3l5m0,3obv3,3maxk,3nyrk,3l917,3mi91,3qiug,3qoes,3oy5q,3l2br,3f2f4,3dkmb,3gvb6,3c9o9,3didj,3g9vj,3fpux,3etw3,3g0fs,3j5uw,3mry7,3uqys,3vkln,3tlt5,3t526,3z2wq,4002e,41va6,40r1s,3xa55,3w2p7,3wv5a,41k54,41wvt,4242z,3zbi5,3xv0j,3unk7,3vp66,3ntw5,3m2qg,3gyxu,38h6j,3c4nf,3a5u6,3oowv,3m59a,3mgvo,3i3tm,3javs,3lr09,3i469,3fjur,3iauw,3jcgr,3i0ih,3jc80,3ipze,3n11z,3lg2f,3teig,3t82b,3u8p6,3qzu0,3jmr5,3io8t,3j6or,3irhy,3iddl,3ex30,3isqm,3fjcy,3gdvw,3c9pb,37e8n,37vsk,39kyu,3egmi,3flf6,3f1q0,3gkxc,3lr20,3km6l,3iqhs,3gsuy,3l40e,3nef3,3r0p1,3rczn,3rthh,3s98r,3rr1d,3twpz,3r5pn,3vfw3,3wyo3,3wyvx,3wn3k,3rl6c,3mfup,3m2ki,3m8oc,3p003,3oyat,3qkwc,3ps37,3p5p5,3lx3q,3l2ow,3pvn2,3rgrk,3qijr,3xnio,3zgnp,410wn,40btr,42l1q,42ij2,43x0z,40jqm,40ils,3yujd,4210r,3y0ru,3znjy,41qxb,45qmk,4brxj,4baas,46tk4,44xdy,44eq0,43c83,419va,451l6,4i8qs,4iu26,4jzcp,4klv9,4scf5,5aghc,58pvv,5doy2,56wq2,5fcc4,5e48y,5cbu9,5e5si,5hqdi,5ltfo,5v7tp,5w24r,5tf4h,5u079,5k2e7,5gx5x,5pqkc,5p76q,5srcm,5qr6i,5swsw,5p6as,5ps8w,5w0qh,5rsom,5y8fj,5yabu,601p6,5sqoc,5rjvi,61558,5yj29,613km,619in,6838h,6avvj,6bfyf,5zcap,5tecp,5t87k,5s3qu,5nxr3,5n6vg,5vexp,5wp1t,5oyq6,5ly26,5nvs6,5kb8e,5ib4s,5k5zx,5mg98,5rl3n,5ub1g,5ujh9,5uxqh,63084,5run0,5npa0,5hxh5,5n3ns,5mrvv,5m8du,5ma2t,5qzck,5ypcp,5yabx,67jkr,67rew,60dpd,63vtg,6b62t,66gkp,67axq,68fy4,68rip,64eo9,62f89,60rva,66qfc,690vt,636o0,5zn51,5stce,61q5d,5tq0f,5qykd,5qx6a,5ql1n,5r1yk,5qfb3,5spir,5pcgi,5tixu,5qwo2,5ssjg,5t5kk,5q5gz,5pb8r,5okib,5r5ef,5uvzq,5pv6r,5r257,5pyh7,5gwph,5a9im,500jq,51dqm,50kai,53zsl,5m6e9,5506h,575xt,5e88l,5ddkv,55iin,54p0o,4suto,4pc50,4xct8,4z8y0,4tuid,509nb,50spk,4wt4q,502k3,4x7ox,55zjk,50b4h,506u5,4znoq,53tco,575up,57dl8,564d0,56x9o,50pbw,4wtiu,4w7v3,4wqrl,52o4v,4wy17,4xr1u,4zk22,4yjmx,4n2l9,4q884,4jnbb,4xarg,4qit4,4yo3a,52rf1,4z47z,51axj,4zc4e,50d6a,52222,50z11,52g9k,52ehr,578so,5ke61,5ktly,5l5i4,5n4lx,5myob,5l2nc,5nrca,5lp0s,5lzcp,5qn6e,5rkdu,5pn21,5ma8j,5nayl,5r7ps,5s762,64wwa,64myo,685nu,66uum,64ld3,677xn,65zq0,66ass,65z83,65670,6b881,6addb,6d3xx,6j4vq,6mxmd,6dyp1,6fayd,6hfxc,6if73,6hrm3,6f99g,6ameo,66v8y,68fe8,6anqg,6az9u,6a373,68l3g,61wuf,67t6h,6aiq5,6am06,6k6y0,6jxdg,6gv5v,6b6xn,6b8xe,6a1w7,6a5f4,6duzt,6896g,68ng9,68fgc,65cqw,61nic,609fn,6a473,6b48n,6dzpn,6dd5u,6dj6w,6e3rm,6g96i,6dnzi,6a9jw,6hgvd,6iz9s,6fnm4,6g07z,6i0dt,6g0ks,6hj5b,6msz5,6wcvy,703id,6zla5,72ud2,74xba,70amp,72ha3,744t2,70tqj,70pvo,6zfd4,6zp58,75ci9,72b4z,71q18,6zvwx,70vn4,73zwo,70yoo,70n0h,70cb4,6wawy,6qswm,6p82v,6swn5,6uwvt,6skw0,6uk4s,6zq3v,6y7rp,6xq3i,73gp4,72i70,75j60,7ckwc,720b7,6zfsh,6zrgj,70283,6xarf,6pyci,6sxp0,6osra,6ycf6,6v33g,6rayk,6jyk9,6ntwa,6mga7,6p33n,6ghut,6h2wn,6g5r1,6hlwg,6m7ov,6nl22,6lp5b,6laj7,6kagd,6mkka,6oan3,6mycg,6s6yb,6vfut,6wy4l,6wjyr,6vc09,6vdxp,6yc9b,6xv1m,6ysw3,6vsph,6w3kl,6v67q,6pm4j,6o60n,6qw6m,6hzbv,6j24e,6j08p,6of3d,6t2ma,6sa46,71ra7,76ecz,7a8fx,7aavq,7cr5l,7fjil,78lrm,7cguz,78mz1,6rtdp,6ls6z,6ut98,6v73d,6qwdg,6lm8f,6frr5,6cjaf,6dn9z,6gzuy,6l521,6gzdi,6eror,6jwcu,6lyqm,6n88e,6tja6,6sj2h,6q5n9,6k7kr,6fius,6it9c,6js2a,6klol,6c99o,61872,66q78,60zul,65olb,63c7y,68dl7,6bddk,64pk1,61xud,5yerv,5mjv3,5os0k,5lv5j,5gzxn,5izb0,5fqc0,56a4a,522mt,51pa4,5674d,59f9c,57ehr,5dv40,5frjo,5f0ud,5epf3,5e7c2,55eqo,5g6ci,5kmx9,5hmmn,5bcvj,5b4d8,5d1oh,5ecdu,5ix6d,5heph,5iiw4,5dm15,5dfdb,58tk6,5530a,5830r,54geb,53457,58z3b,598ot,59ra7,59mqe,5797b,57t8n,56yt6,576sp,57yme,582nh,56r9j,59j6p,57kuq,5a2x2,5crtu,5e6lh,5ftd4,5ld4a,5kk8l,5fhq8,5f930,5e22w,5drs6,5efs9,5fchv,5o9qq,5rzyn,5osdy,5onzl,5nui2,5m191,5ibdc,594dk,5c1j4,5blte,5bp7t,5b5k8,55a6v,59c5t,5bbdi,5b503,515mw,502sn,4oopr,4kuht,4opt8,4i7vh,4co27,3s3a5,47f7m,448wi,475k3,46k2i,43827,3zkyk,3xxoq,43lc4,45lnk,433is,43cl4,40m3l,3y9yv,3zgj7,41p5v,41sib,40s6y,3uni7,3tftj,41tvw,40pti,3x63y,3zj3o,3ww14,43q3q,42o6l,4br22,485fb,428en,40a3n,3xw8e,42vp2,45svy,46o9u,476r7,480zt,48gwm,4bui7,4g5qk,4esih,48pzo,45xai,474ma,45end,41sbb,47l9p,47cay,48s3m,43ap5,3xx49,3y7oj,3xe0z,3yuub,427hr,41zxe,3zeog,3zdee,408ix,43q1h,43c8j,4afyo,48cyi,49v90,4cch7,4cpwn,47i49,4fyp7,4ez9j,4g8o4,4gyfa,4la6w,4ig5i,4eek8,4ihuv,4j4hk,4nv1a,4nojs,4lzmz,4mdk7,4oc39,4ll4u,4jj01,4igdp,4jjbe,4ngr4,4ophy,4oklx,4r3f7,4th4b,4ue4u,4rfzo,4rupd,4sw1n,4waz2,4v55e,4sle4,4py7b,4tzkf,4pgkl,4nj7m,4m3re,4kzhz,4kmi2,4lwup,4mbar,4hytu,4k80z";
+let daily=ENC.split(',').map((s,i)=>({t:D0+i*DAY, p:parseInt(s,36)/100}));
+const EMBED_END=daily[daily.length-1].t;
+const BASE=daily.slice();
+
+/* ===== 실시간 연결 (Cloudflare Worker) =====
+   btc-proxy-worker.js를 배포한 뒤 그 주소를 여기에 넣으면, 페이지를 열 때마다
+   자동으로 최신 구간을 채우고 60초마다 현재가를 갱신합니다.
+   claude.ai 아티팩트 미리보기에서는 CSP 때문에 외부 fetch가 막혀 있어 이 값을
+   넣어도 정적 데이터로 남습니다 — GitHub Pages 등 실제 웹에 올려야 동작합니다.        */
+const PROXY = '';   // 예: 'https://btc-proxy.내계정.workers.dev'
+
+/* ===== 대화 중 채워 넣은 실측 구간 (Fortune·YCharts 등에서 확인) =====
+   워커 연결이 없을 때 기본으로 쓰이는 데이터입니다. "이번 주/달 캔들 채워줘"라고
+   말씀하시면 이 배열 뒤에 최신 구간을 이어 붙여 다시 만들어 드립니다.          */
+const MANUAL_RAW=[
+  [Date.UTC(2026,4,26),76754.77],
+  [Date.UTC(2026,4,29),73105.71],
+  [Date.UTC(2026,5,4),63682.64],
+  [Date.UTC(2026,5,5),61928.7],
+  [Date.UTC(2026,5,9),62639.66],
+  [Date.UTC(2026,5,10),61531.33],
+  [Date.UTC(2026,5,12),63552.3],
+  [Date.UTC(2026,5,13),63537.74],
+  [Date.UTC(2026,5,14),64377.58],
+  [Date.UTC(2026,5,15),65713.62],
+  [Date.UTC(2026,5,16),66300.96],
+  [Date.UTC(2026,5,17),65598.94],
+  [Date.UTC(2026,5,18),64422.57],
+  [Date.UTC(2026,5,19),62900.23],
+  [Date.UTC(2026,5,20),63513.66],
+  [Date.UTC(2026,5,21),64240.23],
+  [Date.UTC(2026,5,22),63231.87],
+  [Date.UTC(2026,5,23),63957.2],
+  [Date.UTC(2026,5,24),62651.93],
+  [Date.UTC(2026,5,25),60909.0],
+  [Date.UTC(2026,5,26),59712.62],
+  [Date.UTC(2026,5,27),59981.83],
+  [Date.UTC(2026,5,28),59943.11],
+  [Date.UTC(2026,5,29),59612.29],
+  [Date.UTC(2026,5,30),60152.36],
+  [Date.UTC(2026,6,1),58566.09],
+  [Date.UTC(2026,6,2),59967.68],
+  [Date.UTC(2026,6,3),61487.3],
+  [Date.UTC(2026,6,4),62553.61],
+  [Date.UTC(2026,6,5),63088.41],
+  [Date.UTC(2026,6,6),63546.43],
+  [Date.UTC(2026,6,7),64072.3],
+  [Date.UTC(2026,6,8),63351.37],
+  [Date.UTC(2026,6,9),62248.93],
+  [Date.UTC(2026,6,10),63220.69],
+  [Date.UTC(2026,6,11),64082.04],
+  [Date.UTC(2026,6,12),63892.79],
+  [Date.UTC(2026,6,13),63746.44],
+  [Date.UTC(2026,6,14),62242.25],
+  [Date.UTC(2026,6,15),64977.36],
+  [Date.UTC(2026,6,16),64722.06],
+  [Date.UTC(2026,6,17),63788.93],
+  [Date.UTC(2026,6,18),63925.51],
+  [Date.UTC(2026,6,19),64793.26],
+  [Date.UTC(2026,6,20),64679.77],
+  [Date.UTC(2026,6,21),65199.44],
+  [Date.UTC(2026,6,22),66506.89],
+  [Date.UTC(2026,6,23),66083.46],
+  [Date.UTC(2026,6,24),65043.65],
+  [Date.UTC(2026,6,25),64093.2],
+  [Date.UTC(2026,6,26),64309.44],
+  [Date.UTC(2026,6,27),65329.54],
+  [Date.UTC(2026,6,28),63711.96],
+  [Date.UTC(2026,6,29),63869.27],
+  [Date.UTC(2026,6,30),63901.15],
+  [Date.UTC(2026,6,31),64722.08]
+];
+const MANUAL=MANUAL_RAW.map(([t,p])=>({t,p}));
+const MANUAL_END=MANUAL.length?MANUAL[MANUAL.length-1].t:EMBED_END;
+
+const SPOT={t:MANUAL_END, p:MANUAL.length?MANUAL[MANUAL.length-1].p:76620};
+let EXTRA=[];        // 사용자가 직접 채운 주봉 (MANUAL 이후 구간만 사용)
+let LIVE=[];         // 프록시로 받아온 실측 일별 종가 (최우선)
+let liveSpot=null;   // 프록시로 받아온 현재가 {p,krw,chg,t}
+const dataEnd=()=> LIVE.length ? LIVE[LIVE.length-1].t
+                 : (EXTRA.length ? EXTRA[EXTRA.length-1].t+6*DAY : MANUAL_END);
+
+/* ================= 포맷 ================= */
+const usd=v=>v>=1e6?'$'+(v/1e6).toFixed(2)+'M':v>=1000?'$'+Math.round(v).toLocaleString('en-US'):'$'+v.toFixed(v<10?2:0);
+const tickLbl=v=>v>=1e6?'$'+(v/1e6>=10?(v/1e6).toFixed(0):(v/1e6).toFixed(1))+'M':v>=1000?'$'+(v/1000)+'K':'$'+v;
+const dstr=t=>{const d=new Date(t);return d.getUTCFullYear()+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+'.'+String(d.getUTCDate()).padStart(2,'0')};
+
+/* ================= 캔들 집계 ================= */
+function keyOf(t,tf){
+  const d=new Date(t);
+  if(tf==='m') return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1);
+  if(tf==='w'){const x=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());return x-((d.getUTCDay()+6)%7)*DAY;}
+  return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
+}
+const cache={};
+function candles(tf){
+  if(cache[tf]) return cache[tf];
+  const map=new Map();
+  for(const {t,p} of daily){
+    const k=keyOf(t,tf); let c=map.get(k);
+    if(!c){ c={t:k,o:p,h:p,l:p,c:p,n:1}; map.set(k,c); }
+    else { c.h=Math.max(c.h,p); c.l=Math.min(c.l,p); c.c=p; c.n++; }
+  }
+  const arr=[...map.values()].sort((a,b)=>a.t-b.t);
+  for(let i=1;i<arr.length;i++){ arr[i].o=arr[i-1].c; arr[i].h=Math.max(arr[i].h,arr[i].o); arr[i].l=Math.min(arr[i].l,arr[i].o); }
+  for(const c of arr){ const s=band(c.t,'sup'),u=band(c.t,'up');
+    c.osc=(Math.log10(c.c)-Math.log10(s))/(Math.log10(u)-Math.log10(s))*100; }
+  return cache[tf]=arr;
+}
+function tfFor(span){ const y=span/(365*DAY); return y>8?'m':y>1.5?'w':'d'; }
+function sliceVis(cs,t0,t1){
+  const a=t0-DAY*40; let lo=0,hi=cs.length;
+  while(lo<hi){ const m=(lo+hi)>>1; cs[m].t<a?lo=m+1:hi=m; }
+  let j=lo; while(j<cs.length&&cs[j].t<=t1) j++;
+  return cs.slice(lo,j);
+}
+
+/* ================= 상태 ================= */
+const T_MIN=Date.UTC(2013,0,1), T_MAX_HARD=Date.UTC(2036,0,1);
+let view={t0:T_MIN, t1:Date.UTC(2027,0,1)};
+let tfMode='auto', tfCur='m', geo=null, cross=null;
+const cv=document.getElementById('chart'), ctx=cv.getContext('2d');
+const tip=document.getElementById('tip');
+
+function clampView(){
+  const minSpan=30*DAY, maxSpan=T_MAX_HARD-T_MIN;
+  let span=Math.min(Math.max(view.t1-view.t0,minSpan),maxSpan);
+  let t0=view.t0, t1=t0+span;
+  if(t0<T_MIN){t0=T_MIN;t1=t0+span;}
+  if(t1>T_MAX_HARD){t1=T_MAX_HARD;t0=t1-span;}
+  view={t0:Math.max(t0,T_MIN),t1};
+}
+
+/* ================= 그리기 ================= */
+function draw(){
+  clampView();
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth;
+  const narrow=W<560, H=narrow?430:480;
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+
+  const m={l:6,r:narrow?48:60,t:12,b:24};
+  const oscH=narrow?64:78, gap=10;
+  const x0=m.l,x1=W-m.r, y0=m.t, y1=H-m.b-oscH-gap;
+  const o0=y1+gap, o1=H-m.b;
+
+  tfCur = tfMode==='auto' ? tfFor(view.t1-view.t0) : tfMode;
+  const cs=candles(tfCur);
+  const X=t=>x0+(t-view.t0)/(view.t1-view.t0)*(x1-x0);
+  const Tof=x=>view.t0+(x-x0)/(x1-x0)*(view.t1-view.t0);
+  const vis=sliceVis(cs,view.t0,view.t1);
+  const spanY=(view.t1-view.t0)/(365*DAY);
+
+  let lo=Infinity,hi=-Infinity;
+  for(const c of vis){ lo=Math.min(lo,c.l); hi=Math.max(hi,c.h); }
+  for(const t of [view.t0,view.t1,(view.t0+view.t1)/2]){
+    lo=Math.min(lo,band(t,'sup')); hi=Math.max(hi,band(t,'fair'));
+    if(spanY>4) hi=Math.max(hi,band(t,'up'));
+  }
+  if(SPOT.t>=view.t0&&SPOT.t<=view.t1){ lo=Math.min(lo,SPOT.p); hi=Math.max(hi,SPOT.p); }
+  lo*=0.72; hi*=1.35;
+  const L0=Math.log10(lo), L1=Math.log10(hi);
+  const Y=p=>y1-(Math.log10(p)-L0)/(L1-L0)*(y1-y0);
+  geo={X,Tof,Y,x0,x1,y0,y1,o0,o1,vis};
+
+  const xN=X(NOW);
+  if(xN<x1){ ctx.fillStyle='rgba(255,255,255,.03)'; ctx.fillRect(Math.max(xN,x0),y0,x1-Math.max(xN,x0),o1-y0); }
+
+  // 직접 입력 구간 음영
+  if(EXTRA.length){
+    const ea=Math.max(X(EXTRA[0].t),x0), eb=Math.min(X(dataEnd()),x1);
+    if(eb>ea){ ctx.fillStyle='rgba(96,165,250,.07)'; ctx.fillRect(ea,y0,eb-ea,o1-y0);
+      ctx.fillStyle='rgba(147,197,253,.75)'; ctx.font='600 10px IBM Plex Mono, monospace';
+      ctx.textAlign='left'; ctx.textBaseline='top'; ctx.fillText('직접 입력',ea+4,y0+4); }
+  }
+  // 자료 없는 구간 (데이터 종료 ~ 오늘)
+  if(dataEnd()<NOW-3*DAY){
+    const ga=Math.max(X(dataEnd()),x0), gb=Math.min(xN,x1);
+    if(gb>ga){
+      ctx.save(); ctx.beginPath(); ctx.rect(ga,y0,gb-ga,o1-y0); ctx.clip();
+      ctx.fillStyle='rgba(120,110,190,.07)'; ctx.fillRect(ga,y0,gb-ga,o1-y0);
+      ctx.strokeStyle='rgba(150,140,220,.16)'; ctx.lineWidth=1;
+      for(let x=ga-(o1-y0);x<gb;x+=7){ ctx.beginPath();ctx.moveTo(x,o1);ctx.lineTo(x+(o1-y0),y0);ctx.stroke(); }
+      ctx.restore();
+      if(gb-ga>52){ ctx.save(); ctx.translate((ga+gb)/2,y0+40); ctx.rotate(-Math.PI/2);
+        ctx.fillStyle='rgba(180,170,240,.75)'; ctx.font='600 10px IBM Plex Mono, monospace';
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('자료 없음',0,0); ctx.restore(); }
+    }
+  }
+
+  ctx.font='10.5px IBM Plex Mono, monospace'; ctx.textBaseline='middle';
+  const decs=[];
+  for(let e=0;e<=8;e++) for(const mlt of [1,2,5]) decs.push(mlt*Math.pow(10,e));
+  for(const v of decs){
+    if(v<lo||v>hi) continue; const y=Y(v); if(y<y0-1||y>y1) continue;
+    const major=Math.log10(v)%1===0;
+    ctx.strokeStyle=major?'rgba(80,66,160,.34)':'rgba(80,66,160,.13)';
+    ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    ctx.fillStyle=major?'#9a92d2':'#6c649f'; ctx.textAlign='left'; ctx.fillText(tickLbl(v),x1+6,y);
+  }
+  ctx.textAlign='center';
+  if(spanY>3){
+    const st=spanY>16?3:spanY>8?2:1;
+    for(let y=2013;y<=2036;y++){ const x=X(Date.UTC(y,0,1)); if(x<x0||x>x1)continue;
+      ctx.strokeStyle='rgba(80,66,160,.15)';ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,o1);ctx.stroke();
+      if((y-2013)%st===0){ctx.fillStyle='#6c649f';ctx.fillText(String(y),x,o1+13);} }
+  } else {
+    const ms=spanY>1.2?3:1;
+    for(let y=2013;y<=2036;y++) for(let mo=0;mo<12;mo+=ms){
+      const x=X(Date.UTC(y,mo,1)); if(x<x0||x>x1)continue;
+      ctx.strokeStyle='rgba(80,66,160,.15)';ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,o1);ctx.stroke();
+      ctx.fillStyle='#6c649f';ctx.fillText(mo===0?String(y):(mo+1)+'월',x,o1+13);
+    }
+  }
+
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,y0,x1-x0,y1-y0); ctx.clip();
+  const step=Math.max(2,(x1-x0)/300);
+  const linePts=k=>{const a=[];for(let x=x0;x<=x1;x+=step)a.push([x,Y(band(Tof(x),k))]);return a;};
+  const P={sup:linePts('sup'),fair:linePts('fair'),up:linePts('up')};
+  ctx.beginPath();
+  P.up.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+  for(let i=P.sup.length-1;i>=0;i--) ctx.lineTo(P.sup[i][0],P.sup[i][1]);
+  ctx.closePath(); ctx.fillStyle='rgba(120,90,220,.05)'; ctx.fill();
+  const drawBand=(k,col,w)=>{
+    ctx.lineWidth=w;ctx.lineJoin='round';
+    ctx.setLineDash([]);ctx.strokeStyle=col;ctx.beginPath();
+    let st=false; for(const [x,y] of P[k]){ if(x>xN) break; st?ctx.lineTo(x,y):(ctx.moveTo(x,y),st=true);} if(st)ctx.stroke();
+    ctx.setLineDash([7,5]);ctx.beginPath(); st=false;
+    for(const [x,y] of P[k]){ if(x<xN-step) continue; st?ctx.lineTo(x,y):(ctx.moveTo(x,y),st=true);} if(st)ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  drawBand('up','#a855f7',1.8); drawBand('fair','#22c55e',1.8); drawBand('sup','#ef4444',2.1);
+
+  ctx.setLineDash([2,4]); ctx.lineWidth=1; ctx.font='600 9.5px IBM Plex Mono, monospace';
+  for(const [t,lab] of HALVING){ const x=X(t); if(x<x0||x>x1)continue;
+    ctx.strokeStyle='rgba(247,147,26,.32)';ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,y1);ctx.stroke();
+    ctx.save();ctx.translate(x-3,y0+4);ctx.rotate(Math.PI/2);ctx.fillStyle='rgba(247,147,26,.7)';
+    ctx.textAlign='left';ctx.fillText('반감기 '+lab,0,0);ctx.restore(); }
+  ctx.setLineDash([]);
+
+  const perMs=tfCur==='m'?30.4*DAY:tfCur==='w'?7*DAY:DAY;
+  const slot=(x1-x0)/((view.t1-view.t0)/perMs);
+  const bw=Math.max(1,Math.min(15,slot*0.68));
+  const dense=slot<1.6;
+  if(dense){
+    ctx.strokeStyle='rgba(232,229,251,.9)'; ctx.lineWidth=1.4; ctx.beginPath();
+    let s2=false; for(const c of vis){ const x=X(c.t)+slot/2,y=Y(c.c); s2?ctx.lineTo(x,y):(ctx.moveTo(x,y),s2=true); }
+    if(s2) ctx.stroke();
+  } else {
+    for(const c of vis){
+      const x=X(c.t)+slot/2, up=c.c>=c.o, col=up?'#26a69a':'#ef5350';
+      ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=Math.max(1,Math.min(2,bw*0.16));
+      ctx.beginPath(); ctx.moveTo(x,Y(c.h)); ctx.lineTo(x,Y(c.l)); ctx.stroke();
+      const yo=Y(c.o), yc=Y(c.c);
+      ctx.fillRect(x-bw/2,Math.min(yo,yc),bw,Math.max(1,Math.abs(yc-yo)));
+    }
+  }
+  const yl=Y(SPOT.p);
+  if(yl>y0&&yl<y1){ ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(247,147,26,.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x0,yl);ctx.lineTo(x1,yl);ctx.stroke();ctx.setLineDash([]);
+    const sx=X(SPOT.t);
+    if(sx>=x0&&sx<=x1){ ctx.fillStyle='#f7931a'; ctx.beginPath(); ctx.arc(sx,yl,3.5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(247,147,26,.9)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(sx,yl,7,0,Math.PI*2); ctx.stroke(); } }
+  ctx.restore();
+
+  ctx.font='600 10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle=dense?'#ff9f6b':'#8e86c4';
+  ctx.fillText((tfCur==='m'?'월봉':tfCur==='w'?'주봉':'일봉')+(tfMode==='auto'?' · 자동':'')
+    +' · '+vis.length.toLocaleString('en-US')+'봉'+(dense?' · 촘촘해 종가선 (확대하면 캔들)':''), x0+6, y0+9);
+
+  const tEdge=Math.min(view.t1,T_MAX_HARD);
+  let bl=[[Y(band(tEdge,'up')),usd(band(tEdge,'up')),'#a855f7'],
+          [Y(band(tEdge,'fair')),usd(band(tEdge,'fair')),'#22c55e'],
+          [Y(band(tEdge,'sup')),usd(band(tEdge,'sup')),'#ef4444'],
+          [yl,usd(SPOT.p),'#f7931a']]
+        .filter(b=>b[0]>=y0&&b[0]<=y1).sort((a,b)=>a[0]-b[0]);
+  for(let i=1;i<bl.length;i++) if(bl[i][0]-bl[i-1][0]<17) bl[i][0]=bl[i-1][0]+17;   // 겹치면 아래로 밀어냄
+  for(let i=bl.length-1;i>0;i--) if(bl[i][0]>y1){ bl[i][0]=y1; if(bl[i][0]-bl[i-1][0]<17) bl[i-1][0]=bl[i][0]-17; }
+  ctx.font='600 10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const [y,txt,col] of bl){
+    ctx.fillStyle=col; ctx.fillRect(x1+1,y-8,m.r-2,16);
+    ctx.fillStyle='#0b0722'; ctx.fillText(txt,x1+1+(m.r-2)/2,y);
+  }
+
+  /* 오실레이터 */
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(x0,o0,x1-x0,o1-o0);
+  ctx.strokeStyle='rgba(80,66,160,.35)'; ctx.lineWidth=1; ctx.strokeRect(x0+.5,o0+.5,x1-x0-1,o1-o0-1);
+  const OY=v=>o1-(v/100)*(o1-o0);
+  ctx.save();ctx.beginPath();ctx.rect(x0,o0,x1-x0,o1-o0);ctx.clip();
+  for(const [v,c] of [[20,'rgba(34,197,94,.35)'],[50,'rgba(140,130,200,.22)'],[80,'rgba(168,85,247,.35)']]){
+    ctx.setLineDash([3,3]);ctx.strokeStyle=c;ctx.beginPath();ctx.moveTo(x0,OY(v));ctx.lineTo(x1,OY(v));ctx.stroke(); }
+  ctx.setLineDash([]);
+  ctx.beginPath(); let st=false;
+  for(const c of vis){ const x=X(c.t)+slot/2,y=OY(Math.max(0,Math.min(100,c.osc)));
+    st?ctx.lineTo(x,y):(ctx.moveTo(x,y),st=true); }
+  if(st){ const grd=ctx.createLinearGradient(0,o0,0,o1);
+    grd.addColorStop(0,'#a855f7'); grd.addColorStop(.5,'#f59e0b'); grd.addColorStop(1,'#22c55e');
+    ctx.strokeStyle=grd; ctx.lineWidth=1.6; ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle='#6c649f'; ctx.font='9.5px IBM Plex Mono, monospace'; ctx.textAlign='left';
+  ctx.fillText('파워로우 오실레이터',x0+6,o0+10);
+  ctx.fillText('100',x1+6,OY(100)+4); ctx.fillText('50',x1+6,OY(50)); ctx.fillText('0',x1+6,OY(0)-4);
+
+  if(cross){ const {px,py}=cross;
+    if(px>=x0&&px<=x1){
+      ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(232,229,251,.35)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(px,y0);ctx.lineTo(px,o1);ctx.stroke();
+      if(py>y0&&py<y1){
+        ctx.beginPath();ctx.moveTo(x0,py);ctx.lineTo(x1,py);ctx.stroke(); ctx.setLineDash([]);
+        const pv=Math.pow(10,L0+(y1-py)/(y1-y0)*(L1-L0));
+        ctx.fillStyle='#3b2f7a';ctx.fillRect(x1+1,py-8,m.r-2,16);
+        ctx.fillStyle='#e8e5fb';ctx.font='600 10px IBM Plex Mono, monospace';ctx.textAlign='center';
+        ctx.fillText(usd(pv),x1+1+(m.r-2)/2,py);
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle='#3b2f7a';ctx.fillRect(px-34,o1+2,68,15);
+      ctx.fillStyle='#e8e5fb';ctx.font='600 9.5px IBM Plex Mono, monospace';ctx.textAlign='center';
+      ctx.fillText(dstr(Tof(px)),px,o1+9.5);
+    }
+  }
+}
+
+/* ================= 상호작용 ================= */
+function unpress(sel){ document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed','false')); }
+function zoomAt(px,factor){
+  const g=geo||{x0:0,x1:cv.clientWidth};
+  const r=Math.min(Math.max((px-g.x0)/(g.x1-g.x0),0),1);
+  const anchor=view.t0+r*(view.t1-view.t0);
+  const span=(view.t1-view.t0)*factor;
+  view={t0:anchor-r*span, t1:anchor+(1-r)*span};
+  unpress('[data-span]'); draw();
+}
+cv.addEventListener('wheel',e=>{ e.preventDefault();
+  const r=cv.getBoundingClientRect(); zoomAt(e.clientX-r.left, Math.exp(e.deltaY*0.0012));
+},{passive:false});
+
+let drag=null,pinch=null,lastTap=0;
+cv.addEventListener('mousedown',e=>{const r=cv.getBoundingClientRect();drag={x:e.clientX-r.left,t0:view.t0,t1:view.t1};});
+addEventListener('mouseup',()=>drag=null);
+cv.addEventListener('mousemove',e=>{
+  const r=cv.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  if(drag&&geo){ const dt=(drag.x-px)/(geo.x1-geo.x0)*(drag.t1-drag.t0);
+    view={t0:drag.t0+dt,t1:drag.t1+dt}; unpress('[data-span]'); draw(); showTip(px,py); return; }
+  cross={px,py}; showTip(px,py); draw();
+});
+cv.addEventListener('mouseleave',()=>{cross=null;tip.style.opacity=0;draw();});
+cv.addEventListener('touchstart',e=>{
+  const r=cv.getBoundingClientRect();
+  if(e.touches.length===2){
+    const [a,b]=e.touches;
+    pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),
+           cx:(a.clientX+b.clientX)/2-r.left, t0:view.t0, t1:view.t1};
+    drag=null;
+  } else if(e.touches.length===1){
+    drag={x:e.touches[0].clientX-r.left,t0:view.t0,t1:view.t1};
+    const n=Date.now();
+    if(n-lastTap<300){ view={t0:T_MIN,t1:Date.UTC(2027,0,1)}; draw(); }
+    lastTap=n;
+  }
+},{passive:false});
+cv.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect();
+  if(e.touches.length===2&&pinch&&geo){
+    const [a,b]=e.touches;
+    const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    const f=Math.min(Math.max(pinch.d/d,0.05),20);
+    const rr=Math.min(Math.max((pinch.cx-geo.x0)/(geo.x1-geo.x0),0),1);
+    const anchor=pinch.t0+rr*(pinch.t1-pinch.t0);
+    const span=(pinch.t1-pinch.t0)*f;
+    view={t0:anchor-rr*span,t1:anchor+(1-rr)*span};
+    unpress('[data-span]'); draw();
+  } else if(e.touches.length===1&&drag&&geo){
+    const px=e.touches[0].clientX-r.left, py=e.touches[0].clientY-r.top;
+    const dt=(drag.x-px)/(geo.x1-geo.x0)*(drag.t1-drag.t0);
+    view={t0:drag.t0+dt,t1:drag.t1+dt};
+    cross={px,py}; unpress('[data-span]'); showTip(px,py); draw();
+  }
+},{passive:false});
+cv.addEventListener('touchend',e=>{
+  if(e.touches.length===0){ pinch=null; drag=null;
+    setTimeout(()=>{tip.style.opacity=0;cross=null;draw();},2200); }
+});
+cv.addEventListener('dblclick',()=>{ view={t0:T_MIN,t1:Date.UTC(2027,0,1)}; draw(); });
+
+function showTip(px,py){
+  if(!geo||px<geo.x0||px>geo.x1){tip.style.opacity=0;return;}
+  const t=geo.Tof(px);
+  let c=null,best=Infinity;
+  for(const k of geo.vis){ const g=Math.abs(k.t-t); if(g<best){best=g;c=k;} }
+  const future=t>NOW+7*DAY;
+  let html=`<div class="d">${dstr(t)}${future?' · 전망':''}</div>`;
+  if(c&&!future){
+    const col=c.c>=c.o?'#26a69a':'#ef5350';
+    html=`<div class="d">${dstr(c.t)} · ${tfCur==='m'?'월':tfCur==='w'?'주':'일'}봉</div>`+
+      `<div style="color:${col}"><i>시가</i>${usd(c.o)}</div>`+
+      `<div style="color:${col}"><i>고가</i>${usd(c.h)}</div>`+
+      `<div style="color:${col}"><i>저가</i>${usd(c.l)}</div>`+
+      `<div style="color:${col}"><i>종가</i>${usd(c.c)}</div>`+
+      `<div style="color:#e8e5fb"><i>위치</i>${c.osc.toFixed(1)}</div>`;
+  }
+  html+=`<div style="color:#a855f7"><i>상단</i>${usd(band(t,'up'))}</div>`+
+        `<div style="color:#22c55e"><i>중단</i>${usd(band(t,'fair'))}</div>`+
+        `<div style="color:#ef4444"><i>하단</i>${usd(band(t,'sup'))}</div>`;
+  tip.innerHTML=html; tip.style.opacity=1;
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  tip.style.left=Math.min(Math.max(px+16,6),cv.clientWidth-w-6)+'px';
+  tip.style.top=Math.min(Math.max(py-h-12,6),cv.clientHeight-h-6)+'px';
+}
+
+/* ================= 컨트롤 ================= */
+document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{
+  unpress('[data-tf]'); b.setAttribute('aria-pressed','true'); tfMode=b.dataset.tf; draw();
+}));
+document.querySelectorAll('[data-span]').forEach(b=>b.addEventListener('click',()=>{
+  unpress('[data-span]'); b.setAttribute('aria-pressed','true');
+  const s=b.dataset.span, end=Math.max(NOW,EMBED_END);
+  if(s==='all') view={t0:T_MIN,t1:Date.UTC(2027,0,1)};
+  else if(s==='future') view={t0:T_MIN,t1:Date.UTC(2034,0,1)};
+  else view={t0:end-(+s)*365*DAY, t1:end+(+s)*40*DAY};
+  draw();
+}));
+
+/* ================= 게이지 / 표 / 요약 ================= */
+function gauge(pos){
+  const g=document.getElementById('gauge'),c=g.getContext('2d');
+  const dpr=window.devicePixelRatio||1,W=g.clientWidth||200,H=140;
+  g.width=W*dpr;g.height=H*dpr;g.style.height=H+'px';
+  c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const cx=W/2,cy=H-24,R=Math.min(W/2-12,86), ang=v=>Math.PI+(v/100)*Math.PI;
+  c.lineWidth=14;c.lineCap='butt';
+  for(const [a,b,col] of [[0,20,'#16a34a'],[20,45,'#84cc16'],[45,70,'#f59e0b'],[70,100,'#a855f7']]){
+    c.strokeStyle=col;c.beginPath();c.arc(cx,cy,R,ang(a),ang(b));c.stroke(); }
+  const a=ang(Math.max(0,Math.min(100,pos)));
+  c.strokeStyle='#f7931a';c.lineWidth=3;c.lineCap='round';
+  c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(a)*(R-6),cy+Math.sin(a)*(R-6));c.stroke();
+  c.fillStyle='#f7931a';c.beginPath();c.arc(cx,cy,5,0,Math.PI*2);c.fill();
+  c.fillStyle='#6c649f';c.font='10px IBM Plex Mono, monospace';
+  c.textAlign='left';c.fillText('저평가',cx-R-4,cy+15);
+  c.textAlign='right';c.fillText('과열',cx+R+4,cy+15);
+}
+function table(){
+  const tb=document.getElementById('tbody');tb.innerHTML='';
+  for(let y=2026;y<=2034;y++){ const t=Date.UTC(y,0,1);
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${y}</td><td class="s">${usd(band(t,'sup'))}</td><td class="f">${usd(band(t,'fair'))}</td><td class="u">${usd(band(t,'up'))}</td></tr>`); }
+}
+function summary(){
+  const p=SPOT.p;
+  const s=band(NOW,'sup'),f=band(NOW,'fair'),u=band(NOW,'up');
+  let ath=0; for(const d of daily) ath=Math.max(ath,d.p);
+  document.getElementById('vNow').textContent=usd(p);
+  document.getElementById('vNowLabel').textContent = liveSpot ? '현재가 (실시간)'
+    : LIVE.length ? '현재가 (실시간)'
+    : EXTRA.length ? '현재가 (직접 입력)'
+    : `현재가 (${dstr(MANUAL_END).slice(2)} 종가)`;
+  document.getElementById('vDD').textContent=(-(1-p/ath)*100).toFixed(1)+'%';
+  document.getElementById('vGap').textContent=((s/p-1)*100).toFixed(1)+'%';
+  document.getElementById('vSup').textContent=usd(s);
+  document.getElementById('vFair').textContent=usd(f);
+  document.getElementById('vUp').textContent=usd(u);
+  const pos=(Math.log10(p)-Math.log10(s))/(Math.log10(u)-Math.log10(s))*100;
+  gauge(pos);
+  document.getElementById('gNum').textContent=pos.toFixed(1);
+  document.getElementById('gTxt').textContent=pos<20?'하단 지지선 부근':pos<45?'중단 아래':pos<70?'적정 위':'과열 구간';
+  document.getElementById('vBase').textContent=dstr(dataEnd()).slice(2);
+  document.getElementById('src').textContent=
+    `캔들: Coin Metrics 일별 종가 ${dstr(D0)} ~ ${dstr(EMBED_END)} (${BASE.length.toLocaleString('en-US')}일, 결측 0)`
+    + (LIVE.length?` · 실시간 연결로 ${dstr(LIVE[0].t)} ~ ${dstr(dataEnd())} 자동 채움 (${LIVE.length}일)`
+       :` · ${dstr(MANUAL[0].t)} ~ ${dstr(MANUAL_END)}는 대화 중 채운 실측값 (${MANUAL.length}개)`
+         +(EXTRA.length?` · ${dstr(EXTRA[0].t)} 이후 ${EXTRA.length}주는 직접 입력값`:''))
+    + (!LIVE.length&&dataEnd()<NOW-3*DAY?` · ${dstr(dataEnd())} 이후는 자료 없음 (빗금)`:'');
+}
+let rz; addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{draw();summary();},150);});
+
+/* ================= 최근 구간 직접 채우기 ================= */
+function rebuild(){
+  daily=BASE.slice();
+  if(LIVE.length){
+    daily=daily.concat(LIVE);
+  } else {
+    daily=daily.concat(MANUAL);
+    for(const w of EXTRA) daily.push({t:w.t,p:w.o},{t:w.t+2*DAY,p:w.h},{t:w.t+4*DAY,p:w.l},{t:w.t+6*DAY,p:w.c});
+  }
+  daily.sort((a,b)=>a.t-b.t);
+  for(const k in cache) delete cache[k];
+  if(!liveSpot){
+    if(LIVE.length){ const L=LIVE[LIVE.length-1]; SPOT.p=L.p; SPOT.t=L.t; }
+    else if(EXTRA.length){ const L=EXTRA[EXTRA.length-1]; SPOT.p=L.c; SPOT.t=L.t+6*DAY; }
+    else if(MANUAL.length){ const L=MANUAL[MANUAL.length-1]; SPOT.p=L.p; SPOT.t=L.t; }
+  }
+}
+function parseRows(txt,unit,fx){
+  const out=[], bad=[];
+  txt.split('\n').forEach((raw,i)=>{
+    // 천 단위 쉼표(1,234,567)를 먼저 제거해야 구분자 쉼표와 섞이지 않는다
+    const s=raw.trim().replace(/(\d),(?=\d{3}(?:\D|$))/g,'$1'); if(!s) return;
+    const f=s.split(/[,\s\t]+/).filter(Boolean);
+    const dm=(f[0]||'').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+    if(!dm){ bad.push(i+1); return; }
+    let t=Date.UTC(+dm[1],+dm[2]-1,+dm[3]);
+    t-=((new Date(t).getUTCDay()+6)%7)*DAY;                 // 그 주 월요일로 맞춤
+    const nums=f.slice(1).map(x=>parseFloat(x.replace(/,/g,''))).filter(n=>isFinite(n)&&n>0);
+    if(!nums.length){ bad.push(i+1); return; }
+    const k = unit==='KRW' ? 1/fx : 1;
+    let o,h,l,c;
+    if(nums.length>=4){ [o,h,l,c]=nums; } else { c=nums[nums.length-1]; o=h=l=c; }
+    h=Math.max(h,o,c); l=Math.min(l,o,c);
+    out.push({t,o:o*k,h:h*k,l:l*k,c:c*k});
+  });
+  out.sort((a,b)=>a.t-b.t);
+  return {rows:out.filter(r=>r.t>MANUAL_END), bad};
+}
+const $=id=>document.getElementById(id);
+$('apply').addEventListener('click',()=>{
+  const fx=parseFloat($('fx').value)||1439;
+  const {rows,bad}=parseRows($('paste').value,$('unit').value,fx);
+  if(!rows.length){ $('msg').textContent='읽을 수 있는 줄이 없습니다. 날짜와 가격을 한 줄에 적어 주세요.'; return; }
+  EXTRA=rows; rebuild(); summary(); draw();
+  $('msg').textContent=`${rows.length}주 반영 (${dstr(rows[0].t)} ~ ${dstr(dataEnd())})`
+    + (bad.length?` · 건너뛴 줄 ${bad.join(', ')}`:'');
+  $('gapNote').textContent='';
+});
+$('clear').addEventListener('click',()=>{
+  EXTRA=[]; SPOT.p=62970; SPOT.t=Date.UTC(2026,7,1);
+  rebuild(); summary(); draw(); $('msg').textContent='입력 구간을 지웠습니다.'; $('paste').value='';
+});
+$('unit').addEventListener('change',e=>{ $('fxWrap').style.display = e.target.value==='KRW'?'':'none'; });
+
+/* ================= 실시간 연결 ================= */
+function timeoutFetch(url,ms=8000){
+  const ctrl=new AbortController(); const id=setTimeout(()=>ctrl.abort(),ms);
+  return fetch(url,{signal:ctrl.signal,cache:'no-store'}).finally(()=>clearTimeout(id));
+}
+async function fetchSpot(base){
+  try{
+    const r=await timeoutFetch(base+'/spot'); if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json(); const b=j.bitcoin; if(!b||!b.usd) throw new Error('형식 오류');
+    return {p:b.usd, krw:b.krw, chg:b.usd_24h_change, t:(b.last_updated_at?b.last_updated_at*1000:Date.now())};
+  }catch(e){ return {err:e.message||String(e)}; }
+}
+async function fetchDaily(base,days=140){
+  try{
+    const r=await timeoutFetch(base+'/daily?days='+days); if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json(); if(!j.prices||j.prices.length<5) throw new Error('데이터 없음');
+    return {rows:j.prices.map(x=>({t:x[0],p:x[1]})).filter(d=>d.t>EMBED_END)};
+  }catch(e){ return {err:e.message||String(e)}; }
+}
+function setConn(state,msg){
+  const el=$('connStat');
+  const map={off:['○ 정적 데이터','#6c649f'],connecting:['◐ 연결 중…','#f59e0b'],
+             on:['● 실시간 연결됨','#22c55e'],error:['● 연결 실패','#ef4444']};
+  const [txt,col]=map[state]; el.textContent=txt; el.style.color=col;
+  $('connMsg').textContent=msg||'';
+}
+let connecting=false;
+async function connect(base,silent){
+  if(!base){ setConn('off'); return; }
+  if(connecting) return; connecting=true;
+  if(!silent) setConn('connecting');
+  const [spot,dl]=await Promise.all([fetchSpot(base),fetchDaily(base)]);
+  connecting=false;
+  const ok = !spot.err || !dl.err;
+  if(!spot.err) liveSpot=spot;
+  if(!dl.err && dl.rows.length) LIVE=dl.rows;
+  if(ok){
+    rebuild();
+    if(liveSpot){ SPOT.p=liveSpot.p; SPOT.t=liveSpot.t; }
+    setConn('on', `마지막 갱신 ${new Date().toLocaleTimeString('ko-KR',{hour12:false})}`
+      + (dl.rows&&dl.rows.length?` · 캔들 ${dstr(dataEnd())}까지`:''));
+    summary(); draw();
+  } else {
+    setConn('error', (spot.err||dl.err));
+  }
+}
+$('connectBtn').addEventListener('click',()=>{
+  const u=$('proxyUrl').value.trim().replace(/\/$/,'');
+  if(!u){ setConn('off'); return; }
+  connect(u,false);
+});
+$('proxyUrl').addEventListener('keydown',e=>{ if(e.key==='Enter') $('connectBtn').click(); });
+
+if(PROXY){
+  $('proxyUrl').value=PROXY;
+  connect(PROXY,false);
+  setInterval(()=>connect(PROXY,true), 60000);   // 60초마다 조용히 갱신
+}
+
+rebuild();
+summary(); draw(); table();
+</script>
+</body>
+</html>
