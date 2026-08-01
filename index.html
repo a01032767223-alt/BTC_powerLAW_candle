@@ -38,6 +38,7 @@
   .c1 b{color:var(--btc)} .c2 b{color:var(--sup)} .c3 b{color:var(--fair)} .c4 b{color:var(--up)}
   .c5 b{color:#ff8a8a} .c6 b{color:#7dd3fc} .c7 b{color:#b8b0e8;font-size:13px}
   .c8 b{color:#fbbf24} .c9 b{color:#fb923c}
+  .c10 b{color:#f472b6;font-size:13px} .c11 b{color:#ec4899}
   .bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
   .bar em{font-style:normal;font-size:11px;color:var(--mute)}
   button{font-family:var(--mono);font-size:11.5px;color:var(--mute);background:transparent;border:1px solid var(--line);
@@ -111,6 +112,8 @@
   <div class="chip c4"><span>상단 · 과열</span><b id="vUp">—</b></div>
   <div class="chip c8"><span id="vHalvSinceLabel">반감기 이후</span><b id="vHalvSince">—</b></div>
   <div class="chip c9"><span id="vHalvUntilLabel">다음 반감기까지</span><b id="vHalvUntil">—</b></div>
+  <div class="chip c10"><span>반감기→고점 평균</span><b id="vPeakLag">—</b></div>
+  <div class="chip c11"><span>다음 고점 예상</span><b id="vPeakNext">—</b></div>
 </div>
 
 <div class="bar">
@@ -194,7 +197,10 @@
   주봉·월봉은 이 종가들을 묶어 시·고·저·종가를 만든 값이라, 데이터가 성긴 5월 말~6월 초 구간은 주중 고저가 실제보다 좁게 나올 수 있습니다.
   다만 장중 순간 저점(예: 2020‑03‑12의 급락 꼬리)은 종가 기준이라 실제보다 짧게 나옵니다.<br>
   <b>오실레이터.</b> 캔들 아래 띠는 그날 가격이 하단선(0)과 상단선(100) 사이 어디였는지를 시계열로 그린 것입니다.
-  세로 점선은 반감기(2028년은 추정).<br>
+  세로 점선은 반감기(2028년은 추정). 핑크 마름모는 각 사이클의 실제 고점 — 2013·2017·2021·2025년 모두
+  해당 반감기로부터 371·525·546·534일 뒤였고, 최근 3회는 525~546일로 꽤 일정합니다. 이 평균(535일)을
+  다음 반감기 추정일에 더해 다음 고점을 가늠해 표시했습니다. 표본이 넷뿐이라 오차가 클 수 있는
+  경험적 패턴이며, 반감기 자체가 가격을 밀어 올린다는 인과를 증명하는 건 아닙니다.<br>
   <b>한계.</b> 사이클 표본 네 번의 로그회귀라 하단선이 잠시 뚫린 적도 있고, 시간이 갈수록 지지선 자체가 가팔라집니다. 여러 잣대 중 하나로만 쓰시길 권합니다.
 </p>
 <div id="src">—</div>
@@ -207,6 +213,17 @@ const band=(t,k)=>A[k]*Math.pow((t-GENESIS)/DAY, N);
 const NOW=Date.now();
 const HALVING=[[Date.UTC(2012,10,28),'2차'],[Date.UTC(2016,6,9),'3차'],[Date.UTC(2020,4,11),'4차'],
                [Date.UTC(2024,3,20),'5차'],[Date.UTC(2028,2,27),'6차(추정)']];
+
+/* 사이클 고점: 반감기 이후 371/525/546/534일 뒤 실제 데이터상의 최고가(위 BASE에서 직접 확인).
+   최근 3회 평균 535일을 다음 반감기(6차 추정)에 더해 다음 고점을 추정한다. */
+const PEAKS=[
+  [Date.UTC(2013,11,4),  1135,   '2차 고점'],
+  [Date.UTC(2017,11,16), 19641,  '3차 고점'],
+  [Date.UTC(2021,10,8),  67542,  '4차 고점'],
+  [Date.UTC(2025,9,6),   124824, '5차 고점'],
+  [Date.UTC(2029,8,13),  null,   '6차 고점(추정)'],   // 6차 반감기(추정) + 평균 535일
+];
+const PEAK_LAG_AVG = 535; // 최근 3회(3차~5차) 반감기→고점 평균 일수, 참고용으로 노출
 
 /* ===== 내장 일별 종가: 2013-01-01부터 연속, base36 센트 ===== */
 const D0=Date.UTC(2013,0,1);
@@ -498,6 +515,48 @@ function draw(){
     }
   }
 
+  // 사이클 고점: 반감기와 같은 방식이되 핑크 계열로 구분. 실측 고점은 캔들 위 점+라벨,
+  // 아직 오지 않은 추정 고점은 세로 점선으로 표시한다.
+  {
+    const visible = PEAKS.map(([t,price,lab])=>({t,price,lab,x:X(t)})).filter(h=>h.x>=x0-1&&h.x<=x1+1);
+    ctx.font='700 10px IBM Plex Mono, monospace';
+    let lastRight=-1e9, rowToggle=0;
+    for(const h of visible){
+      const known = h.price!=null;
+      const col = known ? 'rgba(244,114,182,.9)' : 'rgba(244,114,182,.55)';
+
+      if(known){
+        const y=Y(h.price);
+        ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(244,114,182,.35)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle='#f472b6';
+        ctx.beginPath();
+        for(let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4, r=6;
+          const px=h.x+Math.cos(a)*r, py=y+Math.sin(a)*r;
+          i? ctx.lineTo(px,py) : ctx.moveTo(px,py); }
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.setLineDash([5,4]); ctx.strokeStyle=col; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y1); ctx.stroke(); ctx.setLineDash([]);
+      }
+
+      const text=h.lab+(known?' · '+usd(h.price):'');
+      const tw=ctx.measureText(text).width;
+      let lx=h.x - tw/2 - 8;
+      const willOverlap = lx < lastRight + 6;
+      rowToggle = willOverlap ? (rowToggle+1)%2 : 0;
+      const py = y1 - 26 - rowToggle*17;
+      lx = Math.min(Math.max(h.x - tw/2 - 8, x0+2), x1 - tw - 14);
+      ctx.fillStyle='rgba(9,6,26,.88)';
+      ctx.fillRect(lx, py, tw+16, 16);
+      ctx.strokeStyle=col; ctx.lineWidth=1;
+      ctx.strokeRect(lx+.5, py+.5, tw+15, 15);
+      ctx.fillStyle='#f472b6'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(text, lx+8, py+8.5);
+      lastRight = lx+tw+16;
+    }
+  }
+
   ctx.font='600 10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
   ctx.fillStyle=dense?'#ff9f6b':'#8e86c4';
   ctx.fillText((tfCur==='m'?'월봉':tfCur==='w'?'주봉':'일봉')+(tfMode==='auto'?' · 자동':'')
@@ -715,6 +774,15 @@ function summary(){
   } else {
     document.getElementById('vHalvUntilLabel').textContent='다음 반감기';
     document.getElementById('vHalvUntil').textContent='추정 없음';
+  }
+
+  // 사이클 고점: 실측 4회(371/525/546/534일) 중 최근 3회 평균 지연일과, 그걸로 추정한 다음 고점 날짜
+  document.getElementById('vPeakLag').textContent = PEAK_LAG_AVG+'일 (최근 3회)';
+  const nextPeak = PEAKS[PEAKS.length-1];
+  if(nextPeak && nextPeak[1]==null){
+    const daysToPeak = Math.ceil((nextPeak[0]-NOW)/DAY);
+    document.getElementById('vPeakNext').textContent =
+      dstr(nextPeak[0]).slice(2) + (daysToPeak>0 ? ` (D-${daysToPeak})` : ' (경과)');
   }
 
   document.getElementById('src').textContent=
