@@ -203,6 +203,7 @@
   경험적 패턴이며, 반감기 자체가 가격을 밀어 올린다는 인과를 증명하는 건 아닙니다.<br>
   <b>한계.</b> 사이클 표본 네 번의 로그회귀라 하단선이 잠시 뚫린 적도 있고, 시간이 갈수록 지지선 자체가 가팔라집니다. 여러 잣대 중 하나로만 쓰시길 권합니다.
 </p>
+<p style="margin:14px 0 0;font-size:10.5px;color:#5f5896;text-align:center">© 2026 Park Soonho. All rights reserved.</p>
 <div id="src">—</div>
 
 <script>
@@ -721,6 +722,14 @@ document.querySelectorAll('[data-span]').forEach(b=>b.addEventListener('click',(
 }));
 
 /* ================= 게이지 / 표 / 요약 ================= */
+function gaugeColor(pos){
+  const RED=[239,68,68], GREEN=[34,197,94], PURPLE=[168,85,247]; // 밴드 하단·중단·상단과 동일 계열
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  let c1,c2,t;
+  if(pos<=50){ c1=RED; c2=GREEN; t=pos/50; } else { c1=GREEN; c2=PURPLE; t=(pos-50)/50; }
+  const r=Math.round(lerp(c1[0],c2[0],t)), g=Math.round(lerp(c1[1],c2[1],t)), b=Math.round(lerp(c1[2],c2[2],t));
+  return `rgb(${r},${g},${b})`;
+}
 function gauge(pos){
   const g=document.getElementById('gauge'),c=g.getContext('2d');
   const dpr=window.devicePixelRatio||1,W=g.clientWidth||200,H=140;
@@ -728,8 +737,12 @@ function gauge(pos){
   c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const cx=W/2,cy=H-24,R=Math.min(W/2-12,86), ang=v=>Math.PI+(v/100)*Math.PI;
   c.lineWidth=14;c.lineCap='butt';
-  for(const [a,b,col] of [[0,20,'#16a34a'],[20,45,'#84cc16'],[45,70,'#f59e0b'],[70,100,'#a855f7']]){
-    c.strokeStyle=col;c.beginPath();c.arc(cx,cy,R,ang(a),ang(b));c.stroke(); }
+  const steps=60, eps=0.02; // 살짝 겹쳐 이음매 안티에일리어싱 틈을 없앤다
+  for(let i=0;i<steps;i++){
+    const p0=i/steps*100, p1=(i+1)/steps*100;
+    c.strokeStyle=gaugeColor((p0+p1)/2);
+    c.beginPath(); c.arc(cx,cy,R,ang(p0)-eps,ang(p1)+eps); c.stroke();
+  }
   const a=ang(Math.max(0,Math.min(100,pos)));
   c.strokeStyle='#f7931a';c.lineWidth=3;c.lineCap='round';
   c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(a)*(R-6),cy+Math.sin(a)*(R-6));c.stroke();
