@@ -210,7 +210,7 @@ const BASE=daily.slice();
    자동으로 최신 구간을 채우고 60초마다 현재가를 갱신합니다.
    claude.ai 아티팩트 미리보기에서는 CSP 때문에 외부 fetch가 막혀 있어 이 값을
    넣어도 정적 데이터로 남습니다 — GitHub Pages 등 실제 웹에 올려야 동작합니다.        */
-const PROXY = '';   // 예: 'https://btc-proxy.내계정.workers.dev'
+const PROXY = 'https://frosty-dust-5173.a01032767223.workers.dev';   // 예: 'https://btc-proxy.내계정.workers.dev'
 
 /* ===== 대화 중 채워 넣은 실측 구간 (Fortune·YCharts 등에서 확인) =====
    워커 연결이 없을 때 기본으로 쓰이는 데이터입니다. "이번 주/달 캔들 채워줘"라고
@@ -738,15 +738,22 @@ function timeoutFetch(url,ms=8000){
 async function fetchSpot(base){
   try{
     const r=await timeoutFetch(base+'/spot'); if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json(); const b=j.bitcoin; if(!b||!b.usd) throw new Error('형식 오류');
-    return {p:b.usd, krw:b.krw, chg:b.usd_24h_change, t:(b.last_updated_at?b.last_updated_at*1000:Date.now())};
+    const j=await r.json(); if(typeof j.price!=='number'||!(j.price>0)) throw new Error('형식 오류');
+    return {p:j.price, chg:j.changePct24h, t:j.time||Date.now(), src:j.source};
   }catch(e){ return {err:e.message||String(e)}; }
 }
 async function fetchDaily(base,days=140){
   try{
     const r=await timeoutFetch(base+'/daily?days='+days); if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json(); if(!j.prices||j.prices.length<5) throw new Error('데이터 없음');
-    return {rows:j.prices.map(x=>({t:x[0],p:x[1]})).filter(d=>d.t>EMBED_END)};
+    const j=await r.json(); if(!j.candles||j.candles.length<5) throw new Error('데이터 없음');
+    // 워커가 실제 일별 시고저종(OHLC)을 주므로, 하루 안에 4개 점으로 펼쳐 넣어
+    // daily 배열(종가 시계열)과 같은 파이프라인으로 흘려도 봉 정확도가 그대로 유지되게 한다.
+    const rows=[];
+    for(const c of j.candles){
+      if(c.t<=EMBED_END) continue;
+      rows.push({t:c.t, p:c.o}, {t:c.t+6*3600000, p:c.h}, {t:c.t+12*3600000, p:c.l}, {t:c.t+23*3600000, p:c.c});
+    }
+    return {rows};
   }catch(e){ return {err:e.message||String(e)}; }
 }
 function setConn(state,msg){
