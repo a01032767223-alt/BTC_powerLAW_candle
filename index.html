@@ -37,6 +37,7 @@
   .chip b{display:block;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px}
   .c1 b{color:var(--btc)} .c2 b{color:var(--sup)} .c3 b{color:var(--fair)} .c4 b{color:var(--up)}
   .c5 b{color:#ff8a8a} .c6 b{color:#7dd3fc} .c7 b{color:#b8b0e8;font-size:13px}
+  .c8 b{color:#fbbf24} .c9 b{color:#fb923c}
   .bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
   .bar em{font-style:normal;font-size:11px;color:var(--mute)}
   button{font-family:var(--mono);font-size:11.5px;color:var(--mute);background:transparent;border:1px solid var(--line);
@@ -108,6 +109,8 @@
   <div class="chip c2"><span>하단 · 지지</span><b id="vSup">—</b></div>
   <div class="chip c3"><span>중단 · 적정</span><b id="vFair">—</b></div>
   <div class="chip c4"><span>상단 · 과열</span><b id="vUp">—</b></div>
+  <div class="chip c8"><span id="vHalvSinceLabel">반감기 이후</span><b id="vHalvSince">—</b></div>
+  <div class="chip c9"><span id="vHalvUntilLabel">다음 반감기까지</span><b id="vHalvUntil">—</b></div>
 </div>
 
 <div class="bar">
@@ -441,12 +444,7 @@ function draw(){
   };
   drawBand('up','#a855f7',1.8); drawBand('fair','#22c55e',1.8); drawBand('sup','#ef4444',2.1);
 
-  ctx.setLineDash([2,4]); ctx.lineWidth=1; ctx.font='600 9.5px IBM Plex Mono, monospace';
-  for(const [t,lab] of HALVING){ const x=X(t); if(x<x0||x>x1)continue;
-    ctx.strokeStyle='rgba(247,147,26,.32)';ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,y1);ctx.stroke();
-    ctx.save();ctx.translate(x-3,y0+4);ctx.rotate(Math.PI/2);ctx.fillStyle='rgba(247,147,26,.7)';
-    ctx.textAlign='left';ctx.fillText('반감기 '+lab,0,0);ctx.restore(); }
-  ctx.setLineDash([]);
+  // 반감기 선은 캔들에 가리지 않도록 캔들을 그린 뒤(아래) 다시 그린다.
 
   const perMs=tfCur==='m'?30.4*DAY:tfCur==='w'?7*DAY:DAY;
   const slot=(x1-x0)/((view.t1-view.t0)/perMs);
@@ -472,6 +470,33 @@ function draw(){
     if(sx>=x0&&sx<=x1){ ctx.fillStyle='#f7931a'; ctx.beginPath(); ctx.arc(sx,yl,3.5,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle='rgba(247,147,26,.9)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(sx,yl,7,0,Math.PI*2); ctx.stroke(); } }
   ctx.restore();
+
+  // 반감기: 캔들 위에 그려서 가려지지 않게 하고, 회전 텍스트 대신 알약 라벨로 표시
+  {
+    const visible = HALVING.map(([t,lab])=>({t,lab,x:X(t)})).filter(h=>h.x>=x0-1&&h.x<=x1+1);
+    ctx.lineWidth=1.6; ctx.font='700 10px IBM Plex Mono, monospace';
+    let lastRight=-1e9, rowToggle=0;
+    for(const h of visible){
+      ctx.setLineDash([5,4]); ctx.strokeStyle='rgba(251,191,36,.65)';
+      ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y1); ctx.stroke(); ctx.setLineDash([]);
+
+      const text='반감기 '+h.lab;
+      const tw=ctx.measureText(text).width;
+      let lx=h.x - tw/2 - 8; // 배지 좌측 시작(선 중앙 정렬 기준)
+      // 겹침 감지: 이전 배지 우측 끝과 겹치면 한 줄 아래로
+      const willOverlap = lx < lastRight + 6;
+      rowToggle = willOverlap ? (rowToggle+1)%2 : 0;
+      const py = y0 + 8 + rowToggle*17;
+      lx = Math.min(Math.max(h.x - tw/2 - 8, x0+2), x1 - tw - 14);
+      ctx.fillStyle='rgba(9,6,26,.88)';
+      ctx.fillRect(lx, py, tw+16, 16);
+      ctx.strokeStyle='rgba(251,191,36,.55)'; ctx.lineWidth=1;
+      ctx.strokeRect(lx+.5, py+.5, tw+15, 15);
+      ctx.fillStyle='#fbbf24'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(text, lx+8, py+8.5);
+      lastRight = lx+tw+16;
+    }
+  }
 
   ctx.font='600 10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
   ctx.fillStyle=dense?'#ff9f6b':'#8e86c4';
@@ -674,6 +699,24 @@ function summary(){
   document.getElementById('gNum').textContent=pos.toFixed(1);
   document.getElementById('gTxt').textContent=pos<20?'하단 지지선 부근':pos<45?'중단 아래':pos<70?'적정 위':'과열 구간';
   document.getElementById('vBase').textContent=dstr(dataEnd()).slice(2);
+
+  // 반감기: HALVING 배열에서 오늘 기준 직전/다음 반감기를 찾아 경과일·잔여일 계산
+  let prevH=null, nextH=null;
+  for(const [t,lab] of HALVING){
+    if(t<=NOW) prevH={t,lab}; else if(!nextH) nextH={t,lab};
+  }
+  if(prevH){
+    document.getElementById('vHalvSinceLabel').textContent=`반감기(${prevH.lab}) 이후`;
+    document.getElementById('vHalvSince').textContent=Math.floor((NOW-prevH.t)/DAY).toLocaleString('en-US')+'일';
+  }
+  if(nextH){
+    document.getElementById('vHalvUntilLabel').textContent=`반감기(${nextH.lab}) 까지`;
+    document.getElementById('vHalvUntil').textContent=Math.ceil((nextH.t-NOW)/DAY).toLocaleString('en-US')+'일';
+  } else {
+    document.getElementById('vHalvUntilLabel').textContent='다음 반감기';
+    document.getElementById('vHalvUntil').textContent='추정 없음';
+  }
+
   document.getElementById('src').textContent=
     `캔들: Coin Metrics 일별 종가 ${dstr(D0)} ~ ${dstr(EMBED_END)} (${BASE.length.toLocaleString('en-US')}일, 결측 0)`
     + (LIVE.length?` · 실시간 연결로 ${dstr(LIVE[0].t)} ~ ${dstr(dataEnd())} 자동 채움 (${LIVE.length}일)`
