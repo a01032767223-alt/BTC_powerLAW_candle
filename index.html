@@ -39,6 +39,7 @@
   .c5 b{color:#ff8a8a} .c6 b{color:#7dd3fc} .c7 b{color:#b8b0e8;font-size:13px}
   .c8 b{color:#fbbf24} .c9 b{color:#fb923c}
   .c10 b{color:#00e5ff;font-size:13px} .c11 b{color:#00acc1}
+  .c12 b{color:#a3e635;font-size:13px} .c13 b{color:#84cc16}
   .bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
   .bar em{font-style:normal;font-size:11px;color:var(--mute)}
   button{font-family:var(--mono);font-size:11.5px;color:var(--mute);background:transparent;border:1px solid var(--line);
@@ -114,6 +115,8 @@
   <div class="chip c9"><span id="vHalvUntilLabel">다음 반감기까지</span><b id="vHalvUntil">—</b></div>
   <div class="chip c10"><span>반감기→고점 평균</span><b id="vPeakLag">—</b></div>
   <div class="chip c11"><span>다음 고점 예상</span><b id="vPeakNext">—</b></div>
+  <div class="chip c12"><span>고점→저점 평균</span><b id="vBotLag">—</b></div>
+  <div class="chip c13"><span>다음 저점 예상</span><b id="vBotNext">—</b></div>
 </div>
 
 <div class="bar">
@@ -200,7 +203,9 @@
   세로 점선은 반감기(2028년은 추정). 청록색 마름모는 각 사이클의 실제 고점 — 2013·2017·2021·2025년 모두
   해당 반감기로부터 371·525·546·534일 뒤였고, 최근 3회는 525~546일로 꽤 일정합니다. 이 평균(535일)을
   다음 반감기 추정일에 더해 다음 고점을 가늠해 표시했습니다. 표본이 넷뿐이라 오차가 클 수 있는
-  경험적 패턴이며, 반감기 자체가 가격을 밀어 올린다는 인과를 증명하는 건 아닙니다.<br>
+  경험적 패턴이며, 반감기 자체가 가격을 밀어 올린다는 인과를 증명하는 건 아닙니다.
+  라임색 역삼각형은 각 사이클의 실제 저점 — 고점 이후 406·364·366일 뒤였고, 최근 2회는 거의 정확히
+  1년(365일)입니다. 5차 고점(2025‑10‑06)에 이 평균을 더해 이번 저점을 2026‑10‑06 근처로 추정해 표시했습니다.<br>
   <b>한계.</b> 사이클 표본 네 번의 로그회귀라 하단선이 잠시 뚫린 적도 있고, 시간이 갈수록 지지선 자체가 가팔라집니다. 여러 잣대 중 하나로만 쓰시길 권합니다.
 </p>
 <p style="margin:14px 0 0;font-size:10.5px;color:#5f5896;text-align:center">© 2026 Park Soonho. All rights reserved.</p>
@@ -225,6 +230,16 @@ const PEAKS=[
   [Date.UTC(2029,8,13),  null,   '6차 고점(추정)'],   // 6차 반감기(추정) + 평균 535일
 ];
 const PEAK_LAG_AVG = 535; // 최근 3회(3차~5차) 반감기→고점 평균 일수, 참고용으로 노출
+
+/* 사이클 저점: 각 고점 이후 실제 데이터상의 최저가(위 BASE에서 직접 확인). 406/364/366일 뒤였고,
+   최근 2회는 거의 정확히 1년(365일)이다. 이 평균을 5차 고점(2025-10-06)에 더해 이번 저점을 추정한다. */
+const BOTTOMS=[
+  [Date.UTC(2015,0,14),  175.64,   '2차 저점'],
+  [Date.UTC(2018,11,15), 3185.07,  '3차 저점'],
+  [Date.UTC(2022,10,9),  15758.29, '4차 저점'],
+  [Date.UTC(2026,9,6),   null,     '5차 저점(추정)'],  // 5차 고점 + 평균 365일
+];
+const BOTTOM_LAG_AVG = 365; // 최근 2회(3차~4차) 고점→저점 평균 일수
 
 /* ===== 내장 일별 종가: 2013-01-01부터 연속, base36 센트 ===== */
 const D0=Date.UTC(2013,0,1);
@@ -516,27 +531,31 @@ function draw(){
     }
   }
 
-  // 사이클 고점: 반감기와 같은 방식이되 핑크 계열로 구분. 실측 고점은 캔들 위 점+라벨,
-  // 아직 오지 않은 추정 고점은 세로 점선으로 표시한다.
-  {
-    const visible = PEAKS.map(([t,price,lab])=>({t,price,lab,x:X(t)})).filter(h=>h.x>=x0-1&&h.x<=x1+1);
+  // 사이클 고점·저점: 반감기와 같은 방식이되 각각 색으로 구분. 실측치는 캔들 위 마커+라벨,
+  // 아직 오지 않은 추정치는 세로 점선으로 표시한다.
+  function drawEvents(list, colorHex, colorRgb, shape, labelSide){
+    const visible = list.map(([t,price,lab])=>({t,price,lab,x:X(t)})).filter(h=>h.x>=x0-1&&h.x<=x1+1);
     ctx.font='700 10px IBM Plex Mono, monospace';
     let lastRight=-1e9, rowToggle=0;
     for(const h of visible){
       const known = h.price!=null;
-      const col = known ? 'rgba(0,229,255,.9)' : 'rgba(0,229,255,.55)';
+      const col = known ? `rgba(${colorRgb},.9)` : `rgba(${colorRgb},.55)`;
 
       if(known){
         const y=Y(h.price);
-        ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(0,229,255,.35)'; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.moveTo(h.x,y0); ctx.lineTo(h.x,y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.setLineDash([2,3]); ctx.strokeStyle=`rgba(${colorRgb},.35)`; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(h.x, labelSide==='top'?y0:y); ctx.lineTo(h.x, labelSide==='top'?y:y1); ctx.stroke(); ctx.setLineDash([]);
         ctx.save();
-        ctx.shadowColor='#00e5ff'; ctx.shadowBlur=9;
-        ctx.fillStyle='#00e5ff';
+        ctx.shadowColor=colorHex; ctx.shadowBlur=9;
+        ctx.fillStyle=colorHex;
         ctx.beginPath();
-        for(let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4, r=7.5;
-          const px=h.x+Math.cos(a)*r, py=y+Math.sin(a)*r;
-          i? ctx.lineTo(px,py) : ctx.moveTo(px,py); }
+        if(shape==='diamond'){
+          for(let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4, r=7.5;
+            const px=h.x+Math.cos(a)*r, py=y+Math.sin(a)*r;
+            i? ctx.lineTo(px,py) : ctx.moveTo(px,py); }
+        } else { // 역삼각형 (저점 = 아래를 가리킴)
+          ctx.moveTo(h.x-8,y-6); ctx.lineTo(h.x+8,y-6); ctx.lineTo(h.x,y+7);
+        }
         ctx.closePath(); ctx.fill();
         ctx.shadowBlur=0;
         ctx.strokeStyle='#0b0722'; ctx.lineWidth=1.5; ctx.stroke();
@@ -551,17 +570,20 @@ function draw(){
       let lx=h.x - tw/2 - 8;
       const willOverlap = lx < lastRight + 6;
       rowToggle = willOverlap ? (rowToggle+1)%2 : 0;
-      const py = y1 - 26 - rowToggle*17;
+      const py = labelSide==='top' ? (y0 + 8 + rowToggle*17) : (y1 - 26 - rowToggle*17);
       lx = Math.min(Math.max(h.x - tw/2 - 8, x0+2), x1 - tw - 14);
       ctx.fillStyle='rgba(9,6,26,.88)';
       ctx.fillRect(lx, py, tw+16, 16);
       ctx.strokeStyle=col; ctx.lineWidth=1;
       ctx.strokeRect(lx+.5, py+.5, tw+15, 15);
-      ctx.fillStyle='#00e5ff'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle=colorHex; ctx.textAlign='left'; ctx.textBaseline='middle';
       ctx.fillText(text, lx+8, py+8.5);
       lastRight = lx+tw+16;
     }
+    return visible;
   }
+  const peaksVisible   = drawEvents(PEAKS,   '#00e5ff', '0,229,255', 'diamond',  'bottom');
+  const bottomsVisible = drawEvents(BOTTOMS, '#a3e635', '163,230,53','triangle', 'top');
 
   ctx.font='600 10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
   ctx.fillStyle=dense?'#ff9f6b':'#8e86c4';
@@ -597,6 +619,28 @@ function draw(){
     grd.addColorStop(0,'#a855f7'); grd.addColorStop(.5,'#f59e0b'); grd.addColorStop(1,'#22c55e');
     ctx.strokeStyle=grd; ctx.lineWidth=1.6; ctx.stroke(); }
   ctx.restore();
+
+  // 오실레이터에도 같은 고점·저점을 작은 점으로 표시 (실측치만; 추정치는 오실레이터 값이 없어 생략)
+  {
+    const markOsc=(events,colorHex)=>{
+      for(const h of events){
+        if(h.price==null) continue;
+        let near=null,best=Infinity;
+        for(const c of vis){ const g=Math.abs(c.t-h.t); if(g<best){best=g;near=c;} }
+        if(!near) continue;
+        const ox=X(near.t)+slot/2, oy=OY(Math.max(0,Math.min(100,near.osc)));
+        ctx.save();
+        ctx.shadowColor=colorHex; ctx.shadowBlur=6;
+        ctx.fillStyle=colorHex;
+        ctx.beginPath(); ctx.arc(ox,oy,3.6,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.strokeStyle='#0b0722'; ctx.lineWidth=1; ctx.stroke();
+        ctx.restore();
+      }
+    };
+    markOsc(peaksVisible, '#00e5ff');
+    markOsc(bottomsVisible, '#a3e635');
+  }
   ctx.fillStyle='#6c649f'; ctx.font='9.5px IBM Plex Mono, monospace'; ctx.textAlign='left';
   ctx.fillText('파워로우 오실레이터',x0+6,o0+10);
   ctx.fillText('100',x1+6,OY(100)+4); ctx.fillText('50',x1+6,OY(50)); ctx.fillText('0',x1+6,OY(0)-4);
@@ -647,12 +691,14 @@ cv.addEventListener('mouseleave',()=>{cross=null;tip.style.opacity=0;draw();});
 cv.addEventListener('touchstart',e=>{
   const r=cv.getBoundingClientRect();
   if(e.touches.length===2){
+    e.preventDefault(); // iOS에서 이걸 안 부르면 캔버스 핀치보다 페이지 확대가 먼저 발동한다
     const [a,b]=e.touches;
     pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),
            cx:(a.clientX+b.clientX)/2-r.left, t0:view.t0, t1:view.t1};
     drag=null;
   } else if(e.touches.length===1){
     drag={x:e.touches[0].clientX-r.left,t0:view.t0,t1:view.t1};
+    pinch=null;
     const n=Date.now();
     if(n-lastTap<300){ view={t0:T_MIN,t1:Date.UTC(2027,0,1)}; draw(); }
     lastTap=n;
@@ -661,7 +707,13 @@ cv.addEventListener('touchstart',e=>{
 cv.addEventListener('touchmove',e=>{
   e.preventDefault();
   const r=cv.getBoundingClientRect();
-  if(e.touches.length===2&&pinch&&geo){
+  if(e.touches.length===2&&geo){
+    if(!pinch){ // 한 손가락 드래그 중 두 번째 손가락이 늦게 인식된 경우를 대비한 안전망
+      const [a,b]=e.touches;
+      pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),
+             cx:(a.clientX+b.clientX)/2-r.left, t0:view.t0, t1:view.t1};
+      drag=null;
+    }
     const [a,b]=e.touches;
     const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     const f=Math.min(Math.max(pinch.d/d,0.05),20);
@@ -670,7 +722,9 @@ cv.addEventListener('touchmove',e=>{
     const span=(pinch.t1-pinch.t0)*f;
     view={t0:anchor-rr*span,t1:anchor+(1-rr)*span};
     unpress('[data-span]'); draw();
-  } else if(e.touches.length===1&&drag&&geo){
+  } else if(e.touches.length===1&&geo){
+    if(!drag){ drag={x:e.touches[0].clientX-r.left,t0:view.t0,t1:view.t1}; } // 핀치→한손가락 전환 안전망
+    pinch=null;
     const px=e.touches[0].clientX-r.left, py=e.touches[0].clientY-r.top;
     const dt=(drag.x-px)/(geo.x1-geo.x0)*(drag.t1-drag.t0);
     view={t0:drag.t0+dt,t1:drag.t1+dt};
@@ -801,6 +855,15 @@ function summary(){
     const daysToPeak = Math.ceil((nextPeak[0]-NOW)/DAY);
     document.getElementById('vPeakNext').textContent =
       dstr(nextPeak[0]).slice(2) + (daysToPeak>0 ? ` (D-${daysToPeak})` : ' (경과)');
+  }
+
+  // 사이클 저점: 최근 2회(고점→저점 364/366일) 평균과, 그걸로 추정한 이번 저점
+  document.getElementById('vBotLag').textContent = BOTTOM_LAG_AVG+'일 (최근 2회)';
+  const nextBottom = BOTTOMS[BOTTOMS.length-1];
+  if(nextBottom && nextBottom[1]==null){
+    const daysToBottom = Math.ceil((nextBottom[0]-NOW)/DAY);
+    document.getElementById('vBotNext').textContent =
+      dstr(nextBottom[0]).slice(2) + (daysToBottom>0 ? ` (D-${daysToBottom})` : ' (경과)');
   }
 
   document.getElementById('src').textContent=
