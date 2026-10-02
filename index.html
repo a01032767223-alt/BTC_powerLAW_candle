@@ -1296,7 +1296,10 @@ summary(); draw(); table();
   function boxes() {
     const out = []; let lastTop = null, curLow = null;
     SEGS.forEach(s => {
-      const r = segRange(s);
+      // 아직 시작하지 않은(s.t0가 미래인) 구간은 -31일 버퍼로 당겨온 캔들이 있어도
+      // 실측으로 치지 않는다 — 전환일이 가까워지면 이번 달 캔들을 잘못 주워가 투영 박스가
+      // 높이 0짜리 진짜 박스로 바뀌어 사라져 보이던 버그를 막는다.
+      const r = (s.t0 <= NOW) ? segRange(s) : null;
       if (r) {
         out.push({ dir: s.dir, n: s.n, t0: s.t0, t1: s.t1, lo: r.lo, hi: r.hi, proj: false });
         if (s.dir === 'up') lastTop = r.hi; else curLow = r.lo;
