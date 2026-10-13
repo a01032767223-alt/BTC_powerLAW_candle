@@ -301,9 +301,9 @@
     <div class="chip c7"><span>월봉 기준일</span><b id="cyBase">—</b></div>
     <div class="chip c5"><span>고점 대비</span><b id="cyDd">—</b></div>
     <div class="chip c2"><span>사상 최고가</span><b id="cyAth">—</b></div>
-    <div class="chip c6"><span>이번 구간 최대 낙폭</span><b id="cyMdd">—</b></div>
-    <div class="chip c11"><span>다음 상승 시작</span><b id="cyNext">—</b></div>
-    <div class="chip c4"><span>다음 박스 상단 (투영)</span><b id="cyProj">—</b></div>
+    <div class="chip c6"><span id="cyMddL">이번 구간 최대 낙폭</span><b id="cyMdd">—</b></div>
+    <div class="chip c11"><span id="cyNextL">다음 상승 시작</span><b id="cyNext">—</b></div>
+    <div class="chip c4"><span id="cyProjL">다음 박스 상단 (투영)</span><b id="cyProj">—</b></div>
   </div>
 
   <div class="bar">
@@ -327,6 +327,8 @@
   <div class="cyStages">
     <h2>단계별 매수 트리거 · 고점 대비</h2>
     <div class="cyStageRow" id="cyStageRow"></div>
+    <h2 style="margin-top:14px">하락 구간 기록 · 직전 상승 고점 대비 최저</h2>
+    <div class="cyStageRow" id="cyHistRow"></div>
   </div>
 
   <p class="foot">
@@ -1301,7 +1303,12 @@ summary(); draw(); table();
       // 높이 0짜리 진짜 박스로 바뀌어 사라져 보이던 버그를 막는다.
       const r = (s.t0 <= NOW) ? segRange(s) : null;
       if (r) {
-        out.push({ dir: s.dir, n: s.n, t0: s.t0, t1: s.t1, lo: r.lo, hi: r.hi, proj: false });
+        // 진행 중인 상승 구간: 캔들 몇 개뿐이라 실측 박스가 납작하므로,
+        // 직전 고점 × 1.25까지의 투영 박스를 점선으로 함께 그린다.
+        const live = s.dir === 'up' && NOW < s.t1 && lastTop && curLow;
+        if (live) out.push({ dir: s.dir, n: s.n, t0: s.t0, t1: s.t1,
+          lo: Math.min(curLow, r.lo), hi: Math.max(lastTop * PROJ_MULT, r.hi), proj: true, live: true });
+        out.push({ dir: s.dir, n: s.n, t0: s.t0, t1: s.t1, lo: r.lo, hi: r.hi, proj: false, quiet: !!live });
         if (s.dir === 'up') lastTop = r.hi; else curLow = r.lo;
       } else if (s.dir === 'up' && lastTop && curLow) {
         out.push({ dir: s.dir, n: s.n, t0: s.t0, t1: s.t1, lo: curLow, hi: lastTop * PROJ_MULT, proj: true });
@@ -1400,7 +1407,7 @@ summary(); draw(); table();
       ctx.setLineDash(b.proj ? [5, 4] : []);
       ctx.strokeRect(x0 + .5, y0 + .5, x1 - x0 - 1, y1 - y0 - 1);
       ctx.setLineDash([]);
-      if (x1 - x0 > 58) {
+      if (x1 - x0 > 58 && !b.quiet) {
         ctx.font = '600 10.5px ' + MONO;
         ctx.fillStyle = b.dir === 'up' ? C.up : C.dn;
         ctx.textAlign = 'center';
@@ -1573,6 +1580,17 @@ summary(); draw(); table();
     $('cySub').textContent = el + ' / ' + s.days + '일 경과 · ' + fmtDate(s.t1) + ' 전환 예정';
   }
 
+  function dnHistory() {
+    const out = [];
+    SEGS.forEach((s, i) => {
+      if (s.dir !== 'dn' || s.t0 > NOW) return;
+      const up = segRange(SEGS[i - 1]), dn = segRange(s);
+      if (!up || !dn) return;
+      out.push({ n: s.n, top: up.hi, low: dn.lo, dd: (dn.lo / up.hi - 1) * 100, done: NOW >= s.t1 });
+    });
+    return out;
+  }
+
   function paintStats() {
     if (!CANDLES.length) return;
     const last = CANDLES[CANDLES.length - 1];
@@ -1585,13 +1603,41 @@ summary(); draw(); table();
     $('cyAth').textContent = fmtUSD(ath);
     const dd = (last.c / ath - 1) * 100;
     $('cyDd').textContent = dd.toFixed(1) + '%';
-    const since = CANDLES.filter(d => d.t >= athT);
-    $('cyMdd').textContent = ((Math.min.apply(null, since.map(d => d.l)) / ath - 1) * 100).toFixed(1) + '%';
+    const cur = SEGS[curIdx];
+    const inUp = cur && cur.dir === 'up';
+    const hist = dnHistory();
+    if (inUp && hist.length) {
+      const h = hist[hist.length - 1];
+      $('cyMddL').textContent = '직전 하락 ' + h.n + ' 최대 낙폭';
+      $('cyMdd').textContent = h.dd.toFixed(1) + '%';
+    } else {
+      const since = CANDLES.filter(d => d.t >= athT);
+      $('cyMddL').textContent = '이번 구간 최대 낙폭';
+      $('cyMdd').textContent = ((Math.min.apply(null, since.map(d => d.l)) / ath - 1) * 100).toFixed(1) + '%';
+    }
 
-    const nx = SEGS.find(s => s.dir === 'up' && s.t0 > NOW);
-    $('cyNext').textContent = nx ? fmtDate(nx.t0) + ' (D-' + Math.ceil((nx.t0 - NOW) / DAY) + ')' : '—';
-    const pb = boxes().find(b => b.proj);
-    $('cyProj').textContent = pb ? fmtUSD(pb.hi) : '—';
+    if (cur) {
+      // 다음 전환일은 항상 현재 구간의 끝 — SEGS 범위를 벗어나도 계산된다
+      const nt = cur.t1;
+      $('cyNextL').textContent = inUp ? '다음 하락 시작' : '다음 상승 시작';
+      $('cyNext').textContent = fmtDate(nt) + ' (D-' + Math.ceil((nt - NOW) / DAY) + ')';
+    } else {
+      $('cyNext').textContent = '—';
+    }
+    const bx = boxes();
+    const pb = inUp ? bx.find(b => b.proj && b.t0 === cur.t0) : bx.find(b => b.proj && b.t0 > NOW);
+    $('cyProjL').textContent = inUp ? '이번 박스 상단 (투영)' : '다음 박스 상단 (투영)';
+    $('cyProj').textContent = pb ? fmtUSD(pb.hi) + ' (' + (pb.hi / last.c >= 1 ? '+' : '') + ((pb.hi / last.c - 1) * 100).toFixed(0) + '%)' : '—';
+
+    const hr = $('cyHistRow'); hr.innerHTML = '';
+    hist.forEach(h => {
+      const el = document.createElement('div');
+      el.className = 'cyStg';
+      el.innerHTML = '<div class="lv">하락 ' + h.n + (h.done ? '' : ' (진행)') + '</div>' +
+        '<div class="am">' + h.dd.toFixed(1) + '%</div>' +
+        '<div class="lv" style="margin-top:2px">' + fmtK(h.top) + ' → ' + fmtK(h.low) + '</div>';
+      hr.appendChild(el);
+    });
 
     const row = $('cyStageRow'); row.innerHTML = '';
     STAGES.forEach((st, i) => {
